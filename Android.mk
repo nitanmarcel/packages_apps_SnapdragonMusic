@@ -1,22 +1,26 @@
-
-ifeq ($(strip $(TARGET_USES_SNAPDRAGON_MUSIC)),true)
+ifneq ($(TARGET_HAS_LOW_RAM),true)
 
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_MODULE_TAGS := optional
+LOCAL_SDK_VERSION := system_current
+LOCAL_USE_AAPT2 := true
 
 LOCAL_SRC_FILES := $(call all-java-files-under, src) \
     src/com/android/music/IMediaPlaybackService.aidl
 
-LOCAL_STATIC_JAVA_LIBRARIES = android-support-v4
-LOCAL_STATIC_JAVA_LIBRARIES += android-support-v7-appcompat
-LOCAL_STATIC_JAVA_LIBRARIES += android-support-design
+LOCAL_STATIC_ANDROID_LIBRARIES := \
+        $(ANDROID_SUPPORT_DESIGN_TARGETS) \
+        android-support-compat \
+        android-support-v4 \
+        android-support-media-compat \
+        android-support-v7-appcompat
 
 LOCAL_RESOURCE_DIR = \
         $(LOCAL_PATH)/res \
         frameworks/support/v7/appcompat/res \
-        frameworks/support/design/res
+        frameworks/support/coordinatorlayout/src/main/res
 
 LOCAL_PACKAGE_NAME := SnapdragonMusic
 LOCAL_OVERRIDES_PACKAGES := Music
@@ -28,8 +32,6 @@ LOCAL_AAPT_FLAGS := \
         --auto-add-overlay \
         --extra-packages android.support.v7.appcompat \
         --extra-packages android.support.design
-
-LOCAL_VENDOR_MODULE := true
 
 include $(BUILD_PACKAGE)
 

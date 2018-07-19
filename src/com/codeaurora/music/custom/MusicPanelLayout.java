@@ -691,7 +691,7 @@ public class MusicPanelLayout extends ViewGroup {
     @Override
     protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
         boolean result;
-        final int save = canvas.save(Canvas.CLIP_SAVE_FLAG);
+        final int save = canvas.save();
 
         if (mSlippingView != child) {
             canvas.getClipBounds(mSampleRectangle);
