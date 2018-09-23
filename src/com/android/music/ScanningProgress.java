@@ -45,7 +45,11 @@ public class ScanningProgress extends Activity
                    finish();
                    return;
                 }
-                mCheckExternalMediaThread.start();
+
+                // new one thread to run the runnable,
+                // the thread will quit it self after running
+                new Thread(mCheckExternalMediaThread).start();
+
                 break;
             case EXTERNAL_CHECK_OK:
                 setResult(RESULT_OK);
@@ -61,7 +65,7 @@ public class ScanningProgress extends Activity
         }
     };
 
-    private Thread mCheckExternalMediaThread = new Thread() {
+    private Runnable mCheckExternalMediaThread = new Runnable() {
          @Override
          public void run() {
              int result = isExternalMediaDatabaseReady() ?

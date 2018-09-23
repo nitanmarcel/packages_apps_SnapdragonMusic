@@ -171,10 +171,14 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
         args.putString("artist", mArtistId);
         args.putString("album", Long.valueOf(albumID).toString());
         fragment.setArguments(args);
-        getFragmentManager()
-                .beginTransaction()
-                .replace(R.id.fragment_page, fragment, "track_fragment")
-                .commit();
+
+        if (!mParentActivity.isFinishing() && !mParentActivity.isDestroyed()) {
+            getFragmentManager()
+                    .beginTransaction()
+                    .replace(R.id.fragment_page, fragment, "track_fragment")
+                    .commit();
+        }
+
         MusicUtils.navigatingTabPosition = 1;
     }
 
