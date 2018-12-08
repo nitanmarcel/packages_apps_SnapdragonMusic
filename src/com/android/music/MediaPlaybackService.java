@@ -23,6 +23,7 @@ import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.Notification.Builder;
 import android.app.NotificationManager;
+import android.app.NotificationChannel;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.appwidget.AppWidgetManager;
@@ -45,6 +46,7 @@ import android.drm.DrmStore.Action;
 import android.drm.DrmStore.RightsStatus;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.media.audiofx.AudioEffect;
 import android.media.AudioManager;
 import android.media.AudioManager.OnAudioFocusChangeListener;
@@ -269,6 +271,9 @@ public class MediaPlaybackService extends Service {
     private static final String EXTRA_ATTIBUTE_ID_ARRAY = "Attributes";
     private boolean mIsReadGranted = false;
 
+
+    private static final String CHANNEL_ONE_ID = "Channel-music";
+    private static final String CHANNEL_ONE_NAME = "com.android.music";
 
     private SharedPreferences mPreferences;
     // We use this to distinguish between different cards when saving/restoring playlists.
@@ -653,6 +658,9 @@ public class MediaPlaybackService extends Service {
         mDelayedStopHandler.sendMessageDelayed(msg, IDLE_DELAY);
 
         mControlInStatusBar = getApplicationContext().getResources().getBoolean(R.bool.control_in_statusbar);
+
+        updateNotification();
+
     }
 
     private BroadcastReceiver mScreenTimeoutListener = new BroadcastReceiver() {
@@ -1826,6 +1834,20 @@ public class MediaPlaybackService extends Service {
                 "com.android.music.PLAYBACK_VIEWER")
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), 0));
         status1.setSmallIcon(R.drawable.stat_notify_musicplayer);
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O){
+            NotificationChannel notificationChannel = null;
+
+            notificationChannel = new NotificationChannel(CHANNEL_ONE_ID,
+                    CHANNEL_ONE_NAME, NotificationManager.IMPORTANCE_LOW);
+            notificationChannel.enableLights(true);
+            notificationChannel.setLightColor(Color.RED);
+            notificationChannel.setShowBadge(true);
+            notificationChannel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+            nm.createNotificationChannel(notificationChannel);
+            status1.setChannelId(CHANNEL_ONE_ID);
+        }
+
         status = status1.build();
         status.bigContentView = viewsLarge;
         if (isPlaying()) {
@@ -2996,6 +3018,12 @@ public class MediaPlaybackService extends Service {
         public void stop() {
             mCurrentMediaPlayer.reset();
             mIsInitialized = false;
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O){
+                NotificationManager nm = (NotificationManager) getSystemService(
+                        Context.NOTIFICATION_SERVICE);
+                nm.deleteNotificationChannel(CHANNEL_ONE_ID);
+            }
         }
 
         /**
