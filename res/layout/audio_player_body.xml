@@ -93,10 +93,10 @@
             android:layout_marginStart="-17dp"
             android:layout_marginBottom="5dp"
             android:background="@android:color/transparent"
-            android:indeterminateTint="@color/seekbarcolor"
+            android:indeterminateTint="@color/seek_color"
             android:progressBackgroundTint="@android:color/black"
-            android:progressTint="@color/seekbarcolor"
-            android:thumbTint="@color/seekbarcolor" />
+            android:progressTint="@color/seek_color"
+            android:thumbTint="@color/seek_color" />
     </FrameLayout>
 
     <RelativeLayout

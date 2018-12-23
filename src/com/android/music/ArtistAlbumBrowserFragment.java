@@ -136,7 +136,7 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
             if (isExpanded) {
                 isExpanded = false;
                 mPrevView.setBackground(null);
-                mPrevView.setBackgroundResource(R.color.background);
+                mPrevView.setBackgroundResource(R.color.colorBackground);
                 if (mExpandPos == groupPosition) {
                     mExpandableListView.collapseGroup(mExpandPos);
                     return true;

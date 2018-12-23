@@ -82,7 +82,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="80dp"
                         android:paddingTop="20dp"
-                        android:background="#f57f17">
+                        android:background="@color/colorAccent">
 
                         <ImageView
                             android:id="@+id/imageView2"
@@ -98,7 +98,7 @@
                             android:layout_height="wrap_content"
                             android:layout_gravity="right|center_vertical"
                             android:layout_marginEnd="15dp"
-                            android:src="@drawable/ic_search_white_24dp" />
+                            android:src="@drawable/ic_search" />
                     </FrameLayout>
 
                     <RelativeLayout
@@ -164,7 +164,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="1px"
                             android:layout_below="@id/linearLayout"
-                            android:background="@color/greycheck" />
+                            android:background="@color/colorGrey" />
 
                         <ImageView
                             android:id="@+id/imageView4"

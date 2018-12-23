@@ -18,7 +18,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background"
+    android:background="@color/colorBackground"
     android:gravity="center_vertical"
     android:orientation="vertical" >
 
@@ -35,7 +35,7 @@
         android:clipToPadding="false"
         android:paddingTop="8dp"
         android:layout_weight="1"
-        android:background="@color/background"
+        android:background="@color/colorBackground"
         android:cacheColorHint="#00000000"
         android:scrollingCache="false"
         android:textSize="18sp" />

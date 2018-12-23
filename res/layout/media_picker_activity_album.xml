@@ -33,7 +33,7 @@
         android:numColumns="2"
         android:layout_weight="1"
         android:textSize="18sp"
-        android:background="@color/background"
+        android:background="@color/colorBackground"
         android:drawSelectorOnTop="false"
         android:fastScrollEnabled="true"></GridView>
 </LinearLayout>

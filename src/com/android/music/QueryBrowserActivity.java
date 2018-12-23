@@ -169,10 +169,10 @@ public class QueryBrowserActivity extends ListActivity implements
         }
         setContentView(R.layout.query_activity);
         ActionBar bar = getActionBar();
-        // for color
-        bar.setBackgroundDrawable(new ColorDrawable(Color.parseColor(this.getResources().getString(R.color.app_theme_color))));
-        // for image
-        getActionBar().setDisplayHomeAsUpEnabled(true);
+        if(bar!=null){
+        bar.setBackgroundDrawable(new ColorDrawable(Color.parseColor(this.getResources().getString(R.color.colorPrimary))));
+        bar.setDisplayHomeAsUpEnabled(true);
+        }
 
         mTrackList = getListView();
         mTrackList.setDivider(null);

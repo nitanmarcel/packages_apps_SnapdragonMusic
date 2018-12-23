@@ -47,7 +47,7 @@
         android:layout_width="24dp"
         android:layout_height="24dp"
         android:layout_alignParentEnd="true"
-        android:background="@color/transparent"
+        android:background="@color/colorTransparent"
         android:src="@drawable/close"
         android:visibility="gone"/>
 

@@ -36,6 +36,6 @@
         android:title="@string/search_title"
         android:orderInCategory="100"
         android:showAsAction="always"
-        android:icon="@drawable/ic_search_white_24dp"/>
+        android:icon="@drawable/ic_search"/>
 
 </menu>

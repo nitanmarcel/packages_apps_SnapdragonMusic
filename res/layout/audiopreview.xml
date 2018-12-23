@@ -40,9 +40,9 @@
         android:layout_height="wrap_content"
         android:paddingEnd="8dip"
         android:paddingStart="8dip"
-        android:progressBackgroundTint="@color/greycheck"
-        android:progressTint="@color/seekbarcolor"
-        android:thumbTint="@color/seekbarcolor"
+        android:progressBackgroundTint="@color/colorGrey"
+        android:progressTint="@color/seek_color"
+        android:thumbTint="@color/seek_color"
         android:visibility="gone" />
 
     <LinearLayout

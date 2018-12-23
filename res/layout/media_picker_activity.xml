@@ -121,7 +121,7 @@
                                   android:layout_alignParentEnd="true"
                                   android:layout_alignTop="@+id/imageView2"
                                   android:layout_marginEnd="15dp"
-                                  android:src="@drawable/ic_search_white_24dp" />
+                                  android:src="@drawable/ic_search" />
                           </RelativeLayout>
                       </RelativeLayout>
 
