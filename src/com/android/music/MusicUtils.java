@@ -19,6 +19,7 @@ package com.android.music;
 import android.app.Activity;
 import android.app.Fragment;
 import android.app.FragmentManager;
+import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.ContentUris;
@@ -1840,9 +1841,13 @@ public class MusicUtils {
         Intent i = new Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL);
         try {
             i.putExtra(AudioEffect.EXTRA_AUDIO_SESSION, sService.getAudioSessionId());
+            activity.startActivityForResult(i, Defs.EFFECTS_PANEL);
         } catch (RemoteException ex) {
+            Log.e(TAG, ex.getMessage());
+        }catch (ActivityNotFoundException e){
+            Toast.makeText(activity,"Equalizer not found",Toast.LENGTH_SHORT).show();
+            Log.e(TAG,"Equalizer not found");
         }
-        activity.startActivityForResult(i, Defs.EFFECTS_PANEL);
     }
 
 
