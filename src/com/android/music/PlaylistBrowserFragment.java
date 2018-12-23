@@ -1119,7 +1119,8 @@ public class PlaylistBrowserFragment extends Fragment implements
                             }
                         }
                     }
-                    playlistMap.put(id, mAlbumArtArray);
+                    if(mAlbumArtArray!=null)
+                        playlistMap.put(id, mAlbumArtArray);
                 } catch (Exception e) {
                     System.out.println("Exception caught" + e.getMessage());
                     e.printStackTrace();
