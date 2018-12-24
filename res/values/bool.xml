@@ -30,13 +30,13 @@
 <resources>
 
     <!-- configuration to support group music by folder path -->
-    <bool name="group_by_folder">false</bool>
-    <bool name="control_in_statusbar">false</bool>
+    <bool name="group_by_folder">true</bool>
+    <bool name="control_in_statusbar">true</bool>
     <bool name="delete_video_item">false</bool>
     <bool name="disable_animation">false</bool>
     <bool name="add_playlist_by_filemanager">false</bool>
-    <bool name="exit_in_notification">false</bool>
-    <bool name="exit_in_drawer">false</bool>
+    <bool name="exit_in_notification">true</bool>
+    <bool name="exit_in_drawer">true</bool>
 
 
 </resources>
