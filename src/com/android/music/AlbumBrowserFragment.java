@@ -19,10 +19,6 @@
 
 package com.android.music;
 
-import com.android.music.MusicUtils.Defs;
-import com.android.music.MusicUtils.ServiceToken;
-import com.codeaurora.music.custom.FragmentsFactory;
-
 import android.app.Activity;
 import android.app.Fragment;
 import android.app.SearchManager;
@@ -60,7 +56,6 @@ import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.AlphabetIndexer;
-import android.widget.FrameLayout;
 import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.PopupMenu;
@@ -69,27 +64,50 @@ import android.widget.SectionIndexer;
 import android.widget.SimpleCursorAdapter;
 import android.widget.TextView;
 
+import com.android.music.MusicUtils.Defs;
+import com.android.music.MusicUtils.ServiceToken;
+
 public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
         ServiceConnection {
-    private String mCurrentAlbumId;
-    private String mCurrentAlbumName;
-    private String mCurrentArtistNameForAlbum;
-    boolean mIsUnknownArtist;
-    boolean mIsUnknownAlbum;
-    private AlbumListAdapter mAdapter;
-    private boolean mAdapterSent;
     private final static int SEARCH = CHILD_MENU_BASE;
     private static int mLastListPosCourse = -1;
     @SuppressWarnings("unused")
     private static int mLastListPosFine = -1;
+    private static int mLastSelectedPosition = -1;
+    private static SubMenu mSub = null;
+    public PopupMenu mPopupMenu;
+    boolean mIsUnknownArtist;
+    boolean mIsUnknownAlbum;
+    private String mCurrentAlbumId;
+    private String mCurrentAlbumName;
+    private String mCurrentArtistNameForAlbum;
+    private AlbumListAdapter mAdapter;
+    private boolean mAdapterSent;
     private ServiceToken mToken;
     private GridView mAlbumList;
     private TextView mSdErrorMessageView;
     private View mSdErrorMessageIcon;
-    private static int mLastSelectedPosition = -1;
     private MediaPlaybackActivity mParentActivity;
-    public PopupMenu mPopupMenu;
-    private static SubMenu mSub = null;
+    private Cursor mAlbumCursor;
+    private String mArtistId;
+    private Handler mReScanHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            if (mAdapter != null) {
+                getAlbumCursor(mAdapter.getQueryHandler(), null);
+            }
+        }
+    };
+    private BroadcastReceiver mScanListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            MusicUtils.setSpinnerState(mParentActivity);
+            mReScanHandler.sendEmptyMessage(0);
+            if (intent.getAction().equals(Intent.ACTION_MEDIA_UNMOUNTED)) {
+                MusicUtils.clearAlbumArtCache();
+            }
+        }
+    };
 
     public AlbumBrowserFragment() {
     }
@@ -105,7 +123,9 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
         mParentActivity = (MediaPlaybackActivity) activity;
     }
 
-    /** Called when the activity is first created. */
+    /**
+     * Called when the activity is first created.
+     */
     @Override
     public void onCreate(Bundle icicle) {
         super.onCreate(icicle);
@@ -120,27 +140,27 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
-            Bundle savedInstanceState) {
+                             Bundle savedInstanceState) {
 
         View rootView = inflater.inflate(R.layout.media_picker_fragment_album,
                 container, false);
-        mSdErrorMessageView = (TextView) rootView.findViewById(R.id.sd_message);
+        mSdErrorMessageView = rootView.findViewById(R.id.sd_message);
         mSdErrorMessageIcon = rootView.findViewById(R.id.sd_icon);
         if (getArguments() != null) {
             mArtistId = getArguments().getString("artist");
         }
-        mAlbumList = (GridView) rootView.findViewById(R.id.album_list);
+        mAlbumList = rootView.findViewById(R.id.album_list);
         arrangeGridColums(mParentActivity.getResources().getConfiguration());
         mAlbumList.setOnItemClickListener(new OnItemClickListener() {
             public void onItemClick(AdapterView<?> parent, View v,
-                    int position, long id) {
-               enterAlbum(id);
+                                    int position, long id) {
+                enterAlbum(id);
             }
         });
         mAlbumList.setTextFilterEnabled(true);
         mAdapter = new AlbumListAdapter(mParentActivity.getApplication(), this,
-                R.layout.track_list_item_album, mAlbumCursor, new String[] {},
-                new int[] {});
+                R.layout.track_list_item_album, mAlbumCursor, new String[]{},
+                new int[]{});
         mAlbumList.setAdapter(mAdapter);
         mAlbumList.setOnScrollListener(new AbsListView.OnScrollListener() {
             @Override
@@ -155,7 +175,7 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
 
             @Override
             public void onScroll(AbsListView view, int firstVisibleItem,
-                             int visibleItemCount, int totalItemCount) {
+                                 int visibleItemCount, int totalItemCount) {
             }
         });
         getAlbumCursor(mAdapter.getQueryHandler(), null);
@@ -164,7 +184,7 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
 
     private void enterAlbum(long albumID) {
         mParentActivity.findViewById(R.id.music_tool_bar)
-           .setVisibility(View.GONE);
+                .setVisibility(View.GONE);
         Fragment fragment = new TrackBrowserActivityFragment();
         mLastSelectedPosition = mAlbumList.getSelectedItemPosition();
         Bundle args = new Bundle();
@@ -195,7 +215,7 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        if (mPopupMenu != null ) {
+        if (mPopupMenu != null) {
             mPopupMenu.dismiss();
         }
         if (mSub != null) {
@@ -220,7 +240,7 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
 
     @Override
     public void onDestroy() {
-        if (mPopupMenu != null ) {
+        if (mPopupMenu != null) {
             mPopupMenu.dismiss();
         }
         if (mSub != null) {
@@ -259,26 +279,6 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
         MusicUtils.setSpinnerState(mParentActivity);
     }
 
-    private BroadcastReceiver mScanListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            MusicUtils.setSpinnerState(mParentActivity);
-            mReScanHandler.sendEmptyMessage(0);
-            if (intent.getAction().equals(Intent.ACTION_MEDIA_UNMOUNTED)) {
-                MusicUtils.clearAlbumArtCache();
-            }
-        }
-    };
-
-    private Handler mReScanHandler = new Handler() {
-        @Override
-        public void handleMessage(Message msg) {
-            if (mAdapter != null) {
-                getAlbumCursor(mAdapter.getQueryHandler(), null);
-            }
-        }
-    };
-
     @Override
     public void onPause() {
         mReScanHandler.removeCallbacksAndMessages(null);
@@ -315,56 +315,56 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
     @Override
     public boolean onContextItemSelected(MenuItem item) {
         switch (item.getItemId()) {
-        case PLAY_SELECTION: {
-            // play the selected album
-            long[] list = MusicUtils.getSongListForAlbum(mParentActivity,
-                    Long.parseLong(mCurrentAlbumId));
-            MusicUtils.playAll(mParentActivity, list, 0);
-            return true;
-        }
+            case PLAY_SELECTION: {
+                // play the selected album
+                long[] list = MusicUtils.getSongListForAlbum(mParentActivity,
+                        Long.parseLong(mCurrentAlbumId));
+                MusicUtils.playAll(mParentActivity, list, 0);
+                return true;
+            }
 
-        case QUEUE: {
-            long[] list = MusicUtils.getSongListForAlbum(mParentActivity,
-                    Long.parseLong(mCurrentAlbumId));
-            MusicUtils.addToCurrentPlaylist(mParentActivity, list);
-            MusicUtils.addToPlaylist(mParentActivity, list,
-                    MusicUtils.getPlayListId());
-            return true;
-        }
+            case QUEUE: {
+                long[] list = MusicUtils.getSongListForAlbum(mParentActivity,
+                        Long.parseLong(mCurrentAlbumId));
+                MusicUtils.addToCurrentPlaylist(mParentActivity, list);
+                MusicUtils.addToPlaylist(mParentActivity, list,
+                        MusicUtils.getPlayListId());
+                return true;
+            }
 
-        case NEW_PLAYLIST: {
-            Intent intent = new Intent();
-            intent.setClass(mParentActivity, CreatePlaylist.class);
-            startActivityForResult(intent, NEW_PLAYLIST);
-            return true;
-        }
+            case NEW_PLAYLIST: {
+                Intent intent = new Intent();
+                intent.setClass(mParentActivity, CreatePlaylist.class);
+                startActivityForResult(intent, NEW_PLAYLIST);
+                return true;
+            }
 
-        case PLAYLIST_SELECTED: {
-            long[] list = MusicUtils.getSongListForAlbum(mParentActivity,
-                    Long.parseLong(mCurrentAlbumId));
-            long playlist = item.getIntent().getLongExtra("playlist", 0);
-            MusicUtils.addToPlaylist(mParentActivity, list, playlist);
-            return true;
-        }
+            case PLAYLIST_SELECTED: {
+                long[] list = MusicUtils.getSongListForAlbum(mParentActivity,
+                        Long.parseLong(mCurrentAlbumId));
+                long playlist = item.getIntent().getLongExtra("playlist", 0);
+                MusicUtils.addToPlaylist(mParentActivity, list, playlist);
+                return true;
+            }
 
-        case DELETE_ITEM: {
-            long[] list = MusicUtils.getSongListForAlbum(mParentActivity,
-                    Long.parseLong(mCurrentAlbumId));
-            String f = getString(R.string.delete_album_desc);
-            String desc = String.format(f, mCurrentAlbumName);
-            Bundle b = new Bundle();
-            b.putString("description", desc);
-            b.putLongArray("items", list);
-            Intent intent = new Intent();
-            intent.setClass(mParentActivity, DeleteItems.class);
-            intent.putExtras(b);
-            startActivityForResult(intent, -1);
-            return true;
-        }
+            case DELETE_ITEM: {
+                long[] list = MusicUtils.getSongListForAlbum(mParentActivity,
+                        Long.parseLong(mCurrentAlbumId));
+                String f = getString(R.string.delete_album_desc);
+                String desc = String.format(f, mCurrentAlbumName);
+                Bundle b = new Bundle();
+                b.putString("description", desc);
+                b.putLongArray("items", list);
+                Intent intent = new Intent();
+                intent.setClass(mParentActivity, DeleteItems.class);
+                intent.putExtras(b);
+                startActivityForResult(intent, -1);
+                return true;
+            }
 
-        case SEARCH:
-            doSearch();
-            return true;
+            case SEARCH:
+                doSearch();
+                return true;
 
         }
         return super.onContextItemSelected(item);
@@ -403,32 +403,32 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
         switch (requestCode) {
-        case SCAN_DONE:
-            if (resultCode == mParentActivity.RESULT_CANCELED) {
-                mParentActivity.finish();
-            } else {
-                getAlbumCursor(mAdapter.getQueryHandler(), null);
-            }
-            break;
-
-        case NEW_PLAYLIST:
-            if (resultCode == mParentActivity.RESULT_OK) {
-                Uri uri = intent.getData();
-                if (uri != null) {
-                    long[] list = MusicUtils.getSongListForAlbum(
-                            mParentActivity, Long.parseLong(mCurrentAlbumId));
-                    MusicUtils.addToPlaylist(mParentActivity, list,
-                            Long.parseLong(uri.getLastPathSegment()));
+            case SCAN_DONE:
+                if (resultCode == mParentActivity.RESULT_CANCELED) {
+                    mParentActivity.finish();
+                } else {
+                    getAlbumCursor(mAdapter.getQueryHandler(), null);
                 }
-            }
-            break;
+                break;
+
+            case NEW_PLAYLIST:
+                if (resultCode == mParentActivity.RESULT_OK) {
+                    Uri uri = intent.getData();
+                    if (uri != null) {
+                        long[] list = MusicUtils.getSongListForAlbum(
+                                mParentActivity, Long.parseLong(mCurrentAlbumId));
+                        MusicUtils.addToPlaylist(mParentActivity, list,
+                                Long.parseLong(uri.getLastPathSegment()));
+                    }
+                }
+                break;
         }
     }
 
     private Cursor getAlbumCursor(AsyncQueryHandler async, String filter) {
-        String[] cols = new String[] { MediaStore.Audio.Albums._ID,
+        String[] cols = new String[]{MediaStore.Audio.Albums._ID,
                 MediaStore.Audio.Albums.ARTIST, MediaStore.Audio.Albums.ALBUM,
-                MediaStore.Audio.Albums.ALBUM_ART };
+                MediaStore.Audio.Albums.ALBUM_ART};
 
         Cursor ret = null;
         if (mArtistId != null) {
@@ -528,15 +528,19 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
         }
     }
 
+    public void onServiceConnected(ComponentName name, IBinder service) {
+        mParentActivity
+                .updateNowPlaying(getParentActivity());
+    }
+
+    public void onServiceDisconnected(ComponentName name) {
+        mParentActivity.finish();
+    }
+
     static class AlbumListAdapter extends SimpleCursorAdapter implements
             SectionIndexer {
 
-        @SuppressWarnings("unused")
-        private Drawable mNowPlayingOverlay;
         private final BitmapDrawable mDefaultAlbumIcon;
-        private int mAlbumIdx;
-        private int mArtistIdx;
-        private int mAlbumArtIndex;
         private final Resources mResources;
         @SuppressWarnings("unused")
         private final StringBuilder mStringBuilder = new StringBuilder();
@@ -546,6 +550,11 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
         private final String mAlbumSongSeparator;
         @SuppressWarnings("unused")
         private final Object[] mFormatArgs = new Object[1];
+        @SuppressWarnings("unused")
+        private Drawable mNowPlayingOverlay;
+        private int mAlbumIdx;
+        private int mArtistIdx;
+        private int mAlbumArtIndex;
         private AlphabetIndexer mIndexer;
         private AlbumBrowserFragment mFragment;
         private AsyncQueryHandler mQueryHandler;
@@ -553,31 +562,9 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
         private boolean mConstraintIsValid = false;
         private boolean mFastscroll = false;
 
-        static class ViewHolder {
-            TextView line1;
-            TextView line2;
-            ImageView popup_menu_button;
-            ImageView icon;
-            String albumID;
-            String albumName;
-            String artistNameForAlbum, mCurrentAlbumName;
-        }
-
-        class QueryHandler extends AsyncQueryHandler {
-            QueryHandler(ContentResolver res) {
-                super(res);
-            }
-
-            @Override
-            protected void onQueryComplete(int token, Object cookie,
-                    Cursor cursor) {
-                mFragment.init(cursor);
-            }
-        }
-
         @SuppressWarnings("deprecation")
         AlbumListAdapter(Context context, AlbumBrowserFragment fragment,
-                int layout, Cursor cursor, String[] from, int[] to) {
+                         int layout, Cursor cursor, String[] from, int[] to) {
             super(context, layout, cursor, from, to);
             mQueryHandler = new QueryHandler(context.getContentResolver());
             mFragment = fragment;
@@ -630,45 +617,17 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
         public View newView(Context context, Cursor cursor, ViewGroup parent) {
             View v = super.newView(context, cursor, parent);
             ViewHolder vh = new ViewHolder();
-            vh.line1 = (TextView) v.findViewById(R.id.line1);
-            vh.line2 = (TextView) v.findViewById(R.id.line2);
-            vh.popup_menu_button = (ImageView) v
+            vh.line1 = v.findViewById(R.id.line1);
+            vh.line2 = v.findViewById(R.id.line2);
+            vh.popup_menu_button = v
                     .findViewById(R.id.list_menu_button);
             ((MediaPlaybackActivity) mFragment.getParentActivity())
                     .setTouchDelegate(vh.popup_menu_button);
-            vh.icon = (ImageView) v.findViewById(R.id.icon);
+            vh.icon = v.findViewById(R.id.icon);
             vh.icon.setBackgroundDrawable(mDefaultAlbumIcon);
             vh.icon.setPadding(0, 0, 1, 0);
             v.setTag(vh);
             return v;
-        }
-
-        class BitmapDownload extends AsyncTask {
-            ImageView img = null;
-            String art = null;
-            String name = null;
-
-            public BitmapDownload(ImageView img, String art, String name) {
-                this.img = img;
-                this.art = art;
-                this.name = name;
-            }
-
-            @Override
-            protected Object doInBackground(Object... params) {
-                Bitmap albumArt[] = new Bitmap[1];
-                albumArt[0] = BitmapFactory.decodeFile(art);
-                MusicUtils.mAlbumArtCache.put(art, albumArt);
-                return albumArt[0];
-            }
-
-            @Override
-            protected void onPostExecute(Object result) {
-                super.onPostExecute(result);
-                if (img != null && art.equals(img.getTag())) {
-                    img.setImageBitmap((Bitmap) result);
-                }
-            }
         }
 
         @Override
@@ -697,7 +656,7 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
             // We don't actually need the path to the thumbnail file,
             // we just use it to see if there is album art or not
             String art = cursor.getString(mAlbumArtIndex);
-            Bitmap albumArt[];
+            Bitmap[] albumArt;
             if (art != null) {
                 albumArt = MusicUtils.mAlbumArtCache.get(art);
             } else {
@@ -726,7 +685,7 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
 
                 @Override
                 public void onClick(View v) {
-                    if (mFragment.mPopupMenu != null ) {
+                    if (mFragment.mPopupMenu != null) {
                         mFragment.mPopupMenu.dismiss();
                     }
                     mFragment.mCurrentAlbumName = vh.mCurrentAlbumName;
@@ -756,10 +715,10 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
                     mFragment.mCurrentArtistNameForAlbum = vh.artistNameForAlbum;
                     mFragment.mIsUnknownArtist = mFragment.mCurrentArtistNameForAlbum == null
                             || mFragment.mCurrentArtistNameForAlbum
-                                    .equals(MediaStore.UNKNOWN_STRING);
+                            .equals(MediaStore.UNKNOWN_STRING);
                     mFragment.mIsUnknownAlbum = mFragment.mCurrentAlbumName == null
                             || mFragment.mCurrentAlbumName
-                                    .equals(MediaStore.UNKNOWN_STRING);
+                            .equals(MediaStore.UNKNOWN_STRING);
                 }
             });
         }
@@ -776,7 +735,7 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
                     mFragment.mAlbumCursor = null;
                 }
                 mFragment.mAlbumCursor = cursor;
-                if ((cursor != null && !cursor.isClosed()) || cursor == null) {
+                if (cursor == null || !cursor.isClosed()) {
                     getColumnIndices(cursor);
                     super.changeCursor(cursor);
                 }
@@ -788,7 +747,7 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
             String s = constraint.toString();
             if (mConstraintIsValid
                     && ((s == null && mConstraint == null) || (s != null && s
-                            .equals(mConstraint)))) {
+                    .equals(mConstraint)))) {
                 return getCursor();
             }
             Cursor c = mFragment.getAlbumCursor(null, s);
@@ -808,17 +767,55 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
         public int getSectionForPosition(int position) {
             return 0;
         }
-    }
 
-    private Cursor mAlbumCursor;
-    private String mArtistId;
+        static class ViewHolder {
+            TextView line1;
+            TextView line2;
+            ImageView popup_menu_button;
+            ImageView icon;
+            String albumID;
+            String albumName;
+            String artistNameForAlbum, mCurrentAlbumName;
+        }
 
-    public void onServiceConnected(ComponentName name, IBinder service) {
-        ((MediaPlaybackActivity) mParentActivity)
-                .updateNowPlaying(getParentActivity());
-    }
+        class QueryHandler extends AsyncQueryHandler {
+            QueryHandler(ContentResolver res) {
+                super(res);
+            }
 
-    public void onServiceDisconnected(ComponentName name) {
-        mParentActivity.finish();
+            @Override
+            protected void onQueryComplete(int token, Object cookie,
+                                           Cursor cursor) {
+                mFragment.init(cursor);
+            }
+        }
+
+        class BitmapDownload extends AsyncTask {
+            ImageView img = null;
+            String art = null;
+            String name = null;
+
+            public BitmapDownload(ImageView img, String art, String name) {
+                this.img = img;
+                this.art = art;
+                this.name = name;
+            }
+
+            @Override
+            protected Object doInBackground(Object... params) {
+                Bitmap[] albumArt = new Bitmap[1];
+                albumArt[0] = BitmapFactory.decodeFile(art);
+                MusicUtils.mAlbumArtCache.put(art, albumArt);
+                return albumArt[0];
+            }
+
+            @Override
+            protected void onPostExecute(Object result) {
+                super.onPostExecute(result);
+                if (img != null && art.equals(img.getTag())) {
+                    img.setImageBitmap((Bitmap) result);
+                }
+            }
+        }
     }
 }

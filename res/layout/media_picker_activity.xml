@@ -30,7 +30,7 @@
         app:layout_behavior="@string/appbar_scrolling_view_behavior"
         tools:context="com.android.music.MusicBrowserActivity">
 
-        <com.codeaurora.music.custom.TouchInterceptorScrollView
+        <com.android.music.custom.TouchInterceptorScrollView
             android:id="@+id/media_list"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

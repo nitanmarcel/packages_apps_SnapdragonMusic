@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
+<?xml version="1.0" encoding="utf-8"?><!--
   Copyright (c) 2016, The Linux Foundation. All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -28,8 +27,8 @@
   IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
-        android:color="@color/colorTouchHint"
-        android:radius="64dp">
+    android:color="@color/colorTouchHint"
+    android:radius="64dp">
     <item>
         <shape android:shape="oval">
             <solid android:color="@color/wave_color" />

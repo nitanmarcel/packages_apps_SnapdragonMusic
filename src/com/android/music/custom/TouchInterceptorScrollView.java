@@ -27,17 +27,18 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.codeaurora.music.custom;
+package com.android.music.custom;
 
 
-import com.android.music.TouchInterceptor;
 import android.content.Context;
-import android.util.AttributeSet;
 import android.support.v4.view.NestedScrollingChild;
 import android.support.v4.view.NestedScrollingChildHelper;
+import android.util.AttributeSet;
+
+import com.android.music.TouchInterceptor;
 
 public class TouchInterceptorScrollView extends TouchInterceptor implements
-    NestedScrollingChild{
+        NestedScrollingChild {
 
     private final String TAG = "TouchInterceptorScrollView";
     private final NestedScrollingChildHelper mNestedScrollingChildHelper;
@@ -49,13 +50,13 @@ public class TouchInterceptorScrollView extends TouchInterceptor implements
     }
 
     @Override
-    public void setNestedScrollingEnabled(boolean enabled) {
-        mNestedScrollingChildHelper.setNestedScrollingEnabled(enabled);
+    public boolean isNestedScrollingEnabled() {
+        return mNestedScrollingChildHelper.isNestedScrollingEnabled();
     }
 
     @Override
-    public boolean isNestedScrollingEnabled() {
-        return mNestedScrollingChildHelper.isNestedScrollingEnabled();
+    public void setNestedScrollingEnabled(boolean enabled) {
+        mNestedScrollingChildHelper.setNestedScrollingEnabled(enabled);
     }
 
     @Override
@@ -75,28 +76,28 @@ public class TouchInterceptorScrollView extends TouchInterceptor implements
 
     @Override
     public boolean dispatchNestedScroll(int dxConsumed, int dyConsumed,
-                   int dxUnconsumed, int dyUnconsumed, int[] offsetInWindow) {
+                                        int dxUnconsumed, int dyUnconsumed, int[] offsetInWindow) {
         return mNestedScrollingChildHelper.dispatchNestedScroll(dxConsumed,
-                    dyConsumed, dxUnconsumed, dyUnconsumed, offsetInWindow);
+                dyConsumed, dxUnconsumed, dyUnconsumed, offsetInWindow);
     }
 
     @Override
     public boolean dispatchNestedPreScroll(int dx, int dy, int[] consumed,
-                    int[] offsetInWindow) {
+                                           int[] offsetInWindow) {
         return mNestedScrollingChildHelper.dispatchNestedPreScroll(dx, dy,
-               consumed, offsetInWindow);
+                consumed, offsetInWindow);
     }
 
     @Override
     public boolean dispatchNestedFling(float velocityX, float velocityY,
-                    boolean consumed) {
+                                       boolean consumed) {
         return mNestedScrollingChildHelper.dispatchNestedFling(velocityX,
-               velocityY, consumed);
+                velocityY, consumed);
     }
 
     @Override
     public boolean dispatchNestedPreFling(float velocityX, float velocityY) {
         return mNestedScrollingChildHelper.dispatchNestedPreFling(velocityX,
-               velocityY);
+                velocityY);
     }
 }

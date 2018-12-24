@@ -27,9 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.codeaurora.music.custom;
-
-import java.util.HashMap;
+package com.android.music.custom;
 
 import android.app.Fragment;
 
@@ -41,13 +39,11 @@ import com.android.music.PlaylistBrowserFragment;
 import com.android.music.TrackBrowserActivityFragment;
 import com.android.music.TrackBrowserFragment;
 
+import java.util.HashMap;
+
 public class FragmentsFactory {
 
     private static HashMap<Integer, Fragment> frg = new HashMap<Integer, Fragment>();
-
-    static enum FragmentEnum {
-        ARTIST_FRAG, ALBUM_FRAG, TRACK_FRAG, FOLDER_FRAG, PLAYLIST_FRAG, TRACK_BROWSER
-    };
 
     public static Fragment loadFragment(int pos) {
 
@@ -60,22 +56,26 @@ public class FragmentsFactory {
     private static Fragment createFrag(int position) {
         FragmentEnum frg = FragmentEnum.values()[position];
         switch (frg) {
-        case ARTIST_FRAG:
-            return new ArtistAlbumBrowserFragment();
-        case ALBUM_FRAG:
-            return new AlbumBrowserFragment();
-        case TRACK_FRAG:
-            return new TrackBrowserFragment();
-        case FOLDER_FRAG:
-            if (MusicUtils.isGroupByFolder()) {
-                return new FolderBrowserFragment();
-            }
-            return new PlaylistBrowserFragment();
-        case PLAYLIST_FRAG:
-            return new PlaylistBrowserFragment();
-        case TRACK_BROWSER:
-            return new TrackBrowserActivityFragment();
+            case ARTIST_FRAG:
+                return new ArtistAlbumBrowserFragment();
+            case ALBUM_FRAG:
+                return new AlbumBrowserFragment();
+            case TRACK_FRAG:
+                return new TrackBrowserFragment();
+            case FOLDER_FRAG:
+                if (MusicUtils.isGroupByFolder()) {
+                    return new FolderBrowserFragment();
+                }
+                return new PlaylistBrowserFragment();
+            case PLAYLIST_FRAG:
+                return new PlaylistBrowserFragment();
+            case TRACK_BROWSER:
+                return new TrackBrowserActivityFragment();
         }
         return new ArtistAlbumBrowserFragment();
+    }
+
+    enum FragmentEnum {
+        ARTIST_FRAG, ALBUM_FRAG, TRACK_FRAG, FOLDER_FRAG, PLAYLIST_FRAG, TRACK_BROWSER
     }
 }

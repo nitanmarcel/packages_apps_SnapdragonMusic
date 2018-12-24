@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- 
+<?xml version="1.0" encoding="UTF-8"?><!--
 /*
 ** Copyright 2007, The Android Open Source Project
 **
@@ -17,8 +16,7 @@
 */
  -->
 
-<resources xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="create_playlist_create_text_prompt" msgid="2379436619128383935">"Nyisd meg a billentyűzetet, és nevezd el az új lejátszási listát, vagy válaszd a Mentés lehetőséget a(z) \"<xliff:g id="PLAYLIST">%s</xliff:g>\" név használatához."</string>
     <string name="rename_playlist_same_prompt" msgid="7777541452078260899">"Nyisd meg a billentyűzetet, és adj új nevet a(z) \"<xliff:g id="PLAYLIST">%s</xliff:g>\" lejátszási listának."</string>
     <string name="rename_playlist_diff_prompt" msgid="900422624897120958">"Nyisd meg a billentyűzetet, és adj új nevet a(z) \"<xliff:g id="PLAYLIST">%1$s</xliff:g>\" lejátszási listának, vagy válaszd a Mentés lehetőséget a(z) \"<xliff:g id="NAME">%2$s</xliff:g>\" név használatához."</string>

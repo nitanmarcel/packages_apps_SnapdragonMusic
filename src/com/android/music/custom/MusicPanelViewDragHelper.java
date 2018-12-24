@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.codeaurora.music.custom;
+package com.android.music.custom;
 
 import android.content.Context;
 import android.support.v4.view.MotionEventCompat;
@@ -40,10 +40,10 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.animation.Interpolator;
+
 import java.util.Arrays;
 
 public class MusicPanelViewDragHelper {
-    private static final String TAG = "MusicPanelViewDragHelper";
     public static final int STATE_POSITIONING = 2;
     public static final int LEFT_CORNER = 1 << 0;
     public static final int RIGHT_CORNER = 1 << 1;
@@ -54,18 +54,25 @@ public class MusicPanelViewDragHelper {
     public static final int STATE_SLIPPING = 1;
     public static final int ALL_CORNERS = LEFT_CORNER | TOP_CORNER
             | RIGHT_CORNER | BOTTOM_CORNER;
-    private static final int BASE_POSITIONING_DURATION = 256;
-    private static final int MAX_SETTLE_DURATION = 600;
-    private static final int FASTSCROLL_DURATION = 100;
     public static final int HORIZONTALMOTION = 1 << 0;
     public static final int VERTICALMOTION = 1 << 1;
     public static final int ALLDIRECTION = HORIZONTALMOTION | VERTICALMOTION;
-
+    private static final String TAG = "MusicPanelViewDragHelper";
+    private static final int BASE_POSITIONING_DURATION = 256;
+    private static final int MAX_SETTLE_DURATION = 600;
+    private static final int FASTSCROLL_DURATION = 100;
     private static final int CORNER_SIZE = 20;
-
+    private static final int ZERO = 0;
+    private static final Interpolator mInterpolator = new Interpolator() {
+        public float getInterpolation(float t) {
+            t -= 1.0f;
+            return 1.0f + (t * t * t * t * t);
+        }
+    };
+    private final MusicListener mCallback;
+    private final ViewGroup mPrimaryLayoutView;
     private int mSlipState;
     private int mTouchableGradient;
-
     private int mOnGoingPointerId = UNWANTED_POINTER;
     private float[] mInitialMotionX;
     private float[] mInitialMotionY;
@@ -75,98 +82,22 @@ public class MusicPanelViewDragHelper {
     private int[] mCornerSlipViewInProgress;
     private int[] mCornerHookLocked;
     private int mPointersDown;
-
     private VelocityTracker mVelocityTracker;
     private float mMaxVelocity;
     private float mMinVelocity;
-
     private int mEdgeSize;
     private int mCheckingCorners;
-
     private ScrollerCompat mScrollableView;
-
-    private final MusicListener mCallback;
-
     private View mCalculatedLayout;
-    private boolean mReleaseInProgress;
-
-    private final ViewGroup mPrimaryLayoutView;
-    private static final int ZERO = 0;
-
-    public static abstract class MusicListener {
-        public void onPanelDragStateChanged(int state) {
-        }
-
-        public void onPanelPositionChanged(View view, int dxPos, int dyPos,
-                int left, int top) {
-        }
-
-        public void onPanelCaptured(View view, int id) {
-        }
-
-        public void onPanelReleased(View view, float xvel, float yvel) {
-        }
-
-        public void onPanelEdgeTouched(int flags, int id) {
-        }
-
-        public boolean onPanelEdgeLock(int flags) {
-            return false;
-        }
-
-        public void onPanelDragStarted(int flags, int id) {
-        }
-
-        public int getPanelOrderedChildIndex(int index) {
-            return index;
-        }
-
-        public int getPanelHorizontalDragRange(View view) {
-            return 0;
-        }
-
-        public int getPanelVerticalDragRange(View view) {
-            return 0;
-        }
-
-        public abstract boolean captureView(View view, int id);
-
-        public int clampPanelPositionHorizontal(View view, int left, int dx) {
-            return 0;
-        }
-
-        public int clampPanelPositionVertical(View view, int top, int dy) {
-            return 0;
-        }
-    }
-
-    private static final Interpolator mInterpolator = new Interpolator() {
-        public float getInterpolation(float t) {
-            t -= 1.0f;
-            return 1.0f + (t * t * t * t * t);
-        }
-    };
-
     private final Runnable mSetRunnable = new Runnable() {
         public void run() {
             setSlpPosition(STATE_IDLE);
         }
     };
-
-    public static MusicPanelViewDragHelper create(ViewGroup parent,
-            MusicListener cb) {
-        return new MusicPanelViewDragHelper(parent.getContext(), parent, cb);
-    }
-
-    public static MusicPanelViewDragHelper create(ViewGroup parent,
-            float sensitivity, MusicListener cb) {
-        final MusicPanelViewDragHelper h = create(parent, cb);
-        h.mTouchableGradient = (int) (h.mTouchableGradient * (1 / sensitivity));
-        return h;
-    }
+    private boolean mReleaseInProgress;
 
     private MusicPanelViewDragHelper(Context context, ViewGroup parent,
-            MusicListener cb) {
+                                     MusicListener cb) {
         if (parent == null) {
             throw new IllegalArgumentException("view should not be null");
         }
@@ -187,12 +118,20 @@ public class MusicPanelViewDragHelper {
         mScrollableView = ScrollerCompat.create(context, mInterpolator);
     }
 
-    public void setPanelMinVelocity(float mv) {
-        mMinVelocity = mv;
+    public static MusicPanelViewDragHelper create(ViewGroup parent,
+                                                  MusicListener cb) {
+        return new MusicPanelViewDragHelper(parent.getContext(), parent, cb);
+    }
+
+    public static MusicPanelViewDragHelper create(ViewGroup parent,
+                                                  float sensitivity, MusicListener cb) {
+        final MusicPanelViewDragHelper h = create(parent, cb);
+        h.mTouchableGradient = (int) (h.mTouchableGradient * (1 / sensitivity));
+        return h;
     }
 
     private boolean captureViewAt(boolean speedScrollingExist,
-            int xPosvelocityArg, int yPosvelocityArg, int topArg, int leftArg) {
+                                  int xPosvelocityArg, int yPosvelocityArg, int topArg, int leftArg) {
 
         int pointTopPos = mCalculatedLayout.getTop();
         int pointLfPos = mCalculatedLayout.getLeft();
@@ -225,7 +164,7 @@ public class MusicPanelViewDragHelper {
             final int newY = mScrollableView.getCurrY();
             final int newX = mScrollableView.getCurrX();
             mCallback.onPanelPositionChanged(mCalculatedLayout, newX
-                    - (mScrollableView.getCurrX()),
+                            - (mScrollableView.getCurrX()),
                     newY - (mScrollableView.getCurrY()), newX, newY);
         }
         setSlpPosition(STATE_IDLE);
@@ -233,6 +172,10 @@ public class MusicPanelViewDragHelper {
 
     public float getPanelMinVelocity() {
         return mMinVelocity;
+    }
+
+    public void setPanelMinVelocity(float mv) {
+        mMinVelocity = mv;
     }
 
     public int getPanelDragState() {
@@ -306,7 +249,7 @@ public class MusicPanelViewDragHelper {
     }
 
     private int calculateSettleDuration(View child, int dx, int dy, int xvel,
-            int yvel) {
+                                        int yvel) {
         xvel = getClampMag(xvel, (int) mMinVelocity, (int) mMaxVelocity);
         yvel = getClampMag(yvel, (int) mMinVelocity, (int) mMaxVelocity);
         int absYVel = Math.abs(yvel);
@@ -347,7 +290,7 @@ public class MusicPanelViewDragHelper {
     }
 
     public boolean smoothSlideViewTo(boolean fastScrollExist, int finalLeft,
-            int finalTop, View child) {
+                                     int finalTop, View child) {
 
         mOnGoingPointerId = UNWANTED_POINTER;
         mCalculatedLayout = child;
@@ -519,7 +462,7 @@ public class MusicPanelViewDragHelper {
     }
 
     boolean checkToScroll(View v, boolean checkView, int dx, int dy, int x,
-            int y) {
+                          int y) {
         if (v instanceof ViewGroup) {
             final ViewGroup group = (ViewGroup) v;
             final int scrlX = v.getScrollX();
@@ -532,8 +475,8 @@ public class MusicPanelViewDragHelper {
                         && y + scrlY >= child.getTop()
                         && y + scrlY < child.getBottom()
                         && checkToScroll(child, true, dx, dy,
-                                x + scrlX - child.getLeft(),
-                                y + scrlY - child.getTop())) {
+                        x + scrlX - child.getLeft(),
+                        y + scrlY - child.getTop())) {
                     return true;
                 }
                 i--;
@@ -541,7 +484,7 @@ public class MusicPanelViewDragHelper {
         }
         return checkView
                 && (ViewCompat.canScrollHorizontally(v, -dx) || ViewCompat
-                        .canScrollVertically(v, -dy));
+                .canScrollVertically(v, -dy));
     }
 
     private void actDecodeTouchDown(MotionEvent mv) {
@@ -627,27 +570,27 @@ public class MusicPanelViewDragHelper {
         }
         mVelocityTracker.addMovement(mv);
         switch (action) {
-        case MotionEvent.ACTION_DOWN: {
-            actDecodeTouchDown(mv);
-            break;
-        }
-        case MotionEvent.ACTION_MOVE: {
-            actDecodeTouchMove(mv);
-            break;
-        }
-        case MotionEventCompat.ACTION_POINTER_DOWN: {
-            actDecodeTouchPtrDown(mv);
-            break;
-        }
-        case MotionEventCompat.ACTION_POINTER_UP: {
-            actDecodeTouchPtrUp(mv);
-            break;
-        }
-        case MotionEvent.ACTION_UP:
-        case MotionEvent.ACTION_CANCEL: {
-            cancel();
-            break;
-        }
+            case MotionEvent.ACTION_DOWN: {
+                actDecodeTouchDown(mv);
+                break;
+            }
+            case MotionEvent.ACTION_MOVE: {
+                actDecodeTouchMove(mv);
+                break;
+            }
+            case MotionEventCompat.ACTION_POINTER_DOWN: {
+                actDecodeTouchPtrDown(mv);
+                break;
+            }
+            case MotionEventCompat.ACTION_POINTER_UP: {
+                actDecodeTouchPtrUp(mv);
+                break;
+            }
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL: {
+                cancel();
+                break;
+            }
         }
         return mSlipState == STATE_SLIPPING;
     }
@@ -762,49 +705,49 @@ public class MusicPanelViewDragHelper {
         mVelocityTracker.addMovement(mv);
 
         switch (action) {
-        case MotionEvent.ACTION_DOWN: {
-            actComputeTouchDown(mv);
+            case MotionEvent.ACTION_DOWN: {
+                actComputeTouchDown(mv);
 
-            break;
-        }
-
-        case MotionEventCompat.ACTION_POINTER_DOWN: {
-            actComputeTouchPtrDown(mv);
-            break;
-        }
-
-        case MotionEvent.ACTION_MOVE: {
-            actComputeTouchMove(mv);
-            break;
-        }
-
-        case MotionEventCompat.ACTION_POINTER_UP: {
-            actComputeTouchPtrUp(mv);
-            break;
-        }
-
-        case MotionEvent.ACTION_UP: {
-            if (mSlipState == STATE_SLIPPING) {
-                mVelocityTracker.computeCurrentVelocity(1000, mMaxVelocity);
-                dispatchViewReleased(
-                        getClampMag(VelocityTrackerCompat.getXVelocity(
-                                mVelocityTracker, mOnGoingPointerId),
-                                mMinVelocity, mMaxVelocity),
-                        getClampMag(VelocityTrackerCompat.getYVelocity(
-                                mVelocityTracker, mOnGoingPointerId),
-                                mMinVelocity, mMaxVelocity));
+                break;
             }
-            cancel();
-            break;
-        }
 
-        case MotionEvent.ACTION_CANCEL: {
-            if (mSlipState == STATE_SLIPPING) {
-                dispatchViewReleased(0, 0);
+            case MotionEventCompat.ACTION_POINTER_DOWN: {
+                actComputeTouchPtrDown(mv);
+                break;
             }
-            cancel();
-            break;
-        }
+
+            case MotionEvent.ACTION_MOVE: {
+                actComputeTouchMove(mv);
+                break;
+            }
+
+            case MotionEventCompat.ACTION_POINTER_UP: {
+                actComputeTouchPtrUp(mv);
+                break;
+            }
+
+            case MotionEvent.ACTION_UP: {
+                if (mSlipState == STATE_SLIPPING) {
+                    mVelocityTracker.computeCurrentVelocity(1000, mMaxVelocity);
+                    dispatchViewReleased(
+                            getClampMag(VelocityTrackerCompat.getXVelocity(
+                                    mVelocityTracker, mOnGoingPointerId),
+                                    mMinVelocity, mMaxVelocity),
+                            getClampMag(VelocityTrackerCompat.getYVelocity(
+                                    mVelocityTracker, mOnGoingPointerId),
+                                    mMinVelocity, mMaxVelocity));
+                }
+                cancel();
+                break;
+            }
+
+            case MotionEvent.ACTION_CANCEL: {
+                if (mSlipState == STATE_SLIPPING) {
+                    dispatchViewReleased(0, 0);
+                }
+                cancel();
+                break;
+            }
         }
     }
 
@@ -945,7 +888,7 @@ public class MusicPanelViewDragHelper {
         boolean withIn = false;
         if (view != null
                 && (x >= view.getLeft() && x < view.getRight()
-                        && y >= view.getTop() && y < view.getBottom())) {
+                && y >= view.getTop() && y < view.getBottom())) {
             withIn = true;
         }
         return withIn;
@@ -979,5 +922,52 @@ public class MusicPanelViewDragHelper {
             result |= BOTTOM_CORNER;
 
         return result;
+    }
+
+    public static abstract class MusicListener {
+        public void onPanelDragStateChanged(int state) {
+        }
+
+        public void onPanelPositionChanged(View view, int dxPos, int dyPos,
+                                           int left, int top) {
+        }
+
+        public void onPanelCaptured(View view, int id) {
+        }
+
+        public void onPanelReleased(View view, float xvel, float yvel) {
+        }
+
+        public void onPanelEdgeTouched(int flags, int id) {
+        }
+
+        public boolean onPanelEdgeLock(int flags) {
+            return false;
+        }
+
+        public void onPanelDragStarted(int flags, int id) {
+        }
+
+        public int getPanelOrderedChildIndex(int index) {
+            return index;
+        }
+
+        public int getPanelHorizontalDragRange(View view) {
+            return 0;
+        }
+
+        public int getPanelVerticalDragRange(View view) {
+            return 0;
+        }
+
+        public abstract boolean captureView(View view, int id);
+
+        public int clampPanelPositionHorizontal(View view, int left, int dx) {
+            return 0;
+        }
+
+        public int clampPanelPositionVertical(View view, int top, int dy) {
+            return 0;
+        }
     }
 }

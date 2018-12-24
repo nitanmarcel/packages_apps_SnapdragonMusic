@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
+<?xml version="1.0" encoding="utf-8"?><!--
   Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -30,15 +29,16 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="64dip"
-    android:orientation="vertical"
-    android:gravity="center_vertical">
+    android:gravity="center_vertical"
+    android:orientation="vertical">
 
     <!-- The height is set to half the height of the parent, which is 64 dip -->
 
-    <LinearLayout android:layout_marginStart="28dp"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal" >
+        android:layout_marginStart="28dp"
+        android:orientation="horizontal">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -77,19 +77,21 @@
 
         <!-- The height is set to half the height of the parent, which is 64 dip -->
 
-        <view class="com.android.music.TrackBrowserFragment$WaveView"
+        <view
             android:id="@+id/play_animator"
+            class="com.android.music.TrackBrowserFragment$WaveView"
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:layout_marginEnd="25dp"
             android:visibility="invisible" />
 
-        <ImageView android:layout_marginEnd="10dp"
-            style="@style/OverflowBackground"
+        <ImageView
             android:id="@+id/select_artist"
+            style="@style/OverflowBackground"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-             android:src="@drawable/ic_menu_moreoverflow_normal_holo_light" />
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/ic_menu_moreoverflow_normal_holo_light" />
     </LinearLayout>
 
 </LinearLayout>

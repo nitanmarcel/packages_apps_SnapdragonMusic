@@ -16,39 +16,43 @@
 
 package com.android.music;
 
-import com.android.music.MusicUtils.ServiceToken;
-
 import android.app.ListActivity;
+import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
-import android.content.ContentUris;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.RemoteException;
 import android.provider.MediaStore;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.SimpleCursorAdapter;
 import android.widget.TextView;
-import android.view.KeyEvent;
+
+import com.android.music.MusicUtils.ServiceToken;
 
 import java.util.ArrayList;
 
-public class MediaPickerActivity extends ListActivity implements MusicUtils.Defs
-{
+public class MediaPickerActivity extends ListActivity implements MusicUtils.Defs {
     private ServiceToken mToken;
+    private Cursor mCursor;
+    private String mSortOrder = MediaStore.Audio.Media.TITLE + " COLLATE UNICODE";
+    private String mFirstYear;
+    private String mLastYear;
+    private String mWhereClause;
 
-    public MediaPickerActivity()
-    {
+    public MediaPickerActivity() {
     }
 
-    /** Called when the activity is first created. */
+    /**
+     * Called when the activity is first created.
+     */
     @Override
-    public void onCreate(Bundle icicle)
-    {
+    public void onCreate(Bundle icicle) {
         super.onCreate(icicle);
 
         mFirstYear = getIntent().getStringExtra("firstyear");
@@ -97,15 +101,14 @@ public class MediaPickerActivity extends ListActivity implements MusicUtils.Defs
                 this,
                 R.layout.track_list_item,
                 mCursor,
-                new String[] {},
-                new int[] {});
+                new String[]{},
+                new int[]{});
 
         setListAdapter(adapter);
     }
 
     @Override
-    protected void onListItemClick(ListView l, View v, int position, long id)
-    {
+    protected void onListItemClick(ListView l, View v, int position, long id) {
         mCursor.moveToPosition(position);
         String type = mCursor.getString(mCursor.getColumnIndexOrThrow(
                 MediaStore.Audio.Media.MIME_TYPE));
@@ -145,7 +148,7 @@ public class MediaPickerActivity extends ListActivity implements MusicUtils.Defs
     }
 
     private void MakeCursor() {
-        String[] audiocols = new String[] {
+        String[] audiocols = new String[]{
                 MediaStore.Audio.Media._ID,
                 MediaStore.Audio.Media.ARTIST,
                 MediaStore.Audio.Media.ALBUM,
@@ -154,7 +157,7 @@ public class MediaPickerActivity extends ListActivity implements MusicUtils.Defs
                 MediaStore.Audio.Media.MIME_TYPE,
                 MediaStore.Audio.Media.YEAR
         };
-        String[] videocols = new String[] {
+        String[] videocols = new String[]{
                 MediaStore.Audio.Media._ID,
                 MediaStore.Audio.Media.TITLE,
                 MediaStore.Audio.Media.ARTIST,
@@ -175,13 +178,13 @@ public class MediaPickerActivity extends ListActivity implements MusicUtils.Defs
         if (mFirstYear != null) {
             // If mFirstYear is not null, the picker only for audio because
             // video has no year column.
-            if(type.equals("video/*")) {
+            if (type.equals("video/*")) {
                 mCursor = null;
                 return;
             }
 
             mWhereClause = MediaStore.Audio.Media.YEAR + ">=" + mFirstYear + " AND " +
-                           MediaStore.Audio.Media.YEAR + "<=" + mLastYear;
+                    MediaStore.Audio.Media.YEAR + "<=" + mLastYear;
         }
 
         // If use Cursor[] as before, the Cursor[i] could be null when there is
@@ -192,13 +195,13 @@ public class MediaPickerActivity extends ListActivity implements MusicUtils.Defs
         if (type.equals("video/*")) {
             // Only video.
             c = MusicUtils.query(this, MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                    videocols, null , null, mSortOrder);
+                    videocols, null, null, mSortOrder);
             if (c != null) {
                 cList.add(c);
             }
         } else {
             c = MusicUtils.query(this, MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                    audiocols, mWhereClause , null, mSortOrder);
+                    audiocols, mWhereClause, null, mSortOrder);
 
             if (c != null) {
                 cList.add(c);
@@ -207,7 +210,7 @@ public class MediaPickerActivity extends ListActivity implements MusicUtils.Defs
             if (mFirstYear == null && intent.getType().equals("media/*")) {
                 // video has no year column
                 c = MusicUtils.query(this, MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                    videocols, null , null, mSortOrder);
+                        videocols, null, null, mSortOrder);
                 if (c != null) {
                     cList.add(c);
                 }
@@ -228,12 +231,6 @@ public class MediaPickerActivity extends ListActivity implements MusicUtils.Defs
         mCursor = new SortCursor(cs, MediaStore.Audio.Media.TITLE);
     }
 
-    private Cursor mCursor;
-    private String mSortOrder = MediaStore.Audio.Media.TITLE + " COLLATE UNICODE";
-    private String mFirstYear;
-    private String mLastYear;
-    private String mWhereClause;
-
     static class PickListAdapter extends SimpleCursorAdapter {
         int mTitleIdx;
         int mArtistIdx;
@@ -248,32 +245,32 @@ public class MediaPickerActivity extends ListActivity implements MusicUtils.Defs
             mAlbumIdx = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM);
             mMimeIdx = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE);
         }
-        
+
         @Override
         public View newView(Context context, Cursor cursor, ViewGroup parent) {
-           View v = super.newView(context, cursor, parent);
-           ImageView iv = (ImageView) v.findViewById(R.id.icon);
-           iv.setVisibility(View.VISIBLE);
-           ViewGroup.LayoutParams p = iv.getLayoutParams();
-           p.width = ViewGroup.LayoutParams.WRAP_CONTENT;
-           p.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+            View v = super.newView(context, cursor, parent);
+            ImageView iv = v.findViewById(R.id.icon);
+            iv.setVisibility(View.VISIBLE);
+            ViewGroup.LayoutParams p = iv.getLayoutParams();
+            p.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+            p.height = ViewGroup.LayoutParams.WRAP_CONTENT;
 
-           TextView tv = (TextView) v.findViewById(R.id.duration);
-           tv.setVisibility(View.GONE);
-           iv = (ImageView) v.findViewById(R.id.play_indicator);
-           iv.setVisibility(View.GONE);
-           
-           return v;
+            TextView tv = v.findViewById(R.id.duration);
+            tv.setVisibility(View.GONE);
+            iv = v.findViewById(R.id.play_indicator);
+            iv.setVisibility(View.GONE);
+
+            return v;
         }
 
         @Override
         public void bindView(View view, Context context, Cursor cursor) {
 
-            TextView tv = (TextView) view.findViewById(R.id.line1);
+            TextView tv = view.findViewById(R.id.line1);
             String name = cursor.getString(mTitleIdx);
             tv.setText(name);
-            
-            tv = (TextView) view.findViewById(R.id.line2);
+
+            tv = view.findViewById(R.id.line2);
             name = cursor.getString(mAlbumIdx);
             StringBuilder builder = new StringBuilder();
             if (name == null || name.equals(MediaStore.UNKNOWN_STRING)) {
@@ -291,14 +288,14 @@ public class MediaPickerActivity extends ListActivity implements MusicUtils.Defs
             tv.setText(builder.toString());
 
             String text = cursor.getString(mMimeIdx);
-            ImageView iv = (ImageView) view.findViewById(R.id.icon);;
-            if("audio/midi".equals(text)) {
+            ImageView iv = view.findViewById(R.id.icon);
+            if ("audio/midi".equals(text)) {
                 iv.setImageResource(R.drawable.midi);
-            } else if(text != null && (text.startsWith("audio") ||
+            } else if (text != null && (text.startsWith("audio") ||
                     text.equals("application/ogg") ||
                     text.equals("application/x-ogg"))) {
                 iv.setImageResource(R.drawable.ic_search_category_music_song);
-            } else if(text != null && text.startsWith("video")) {
+            } else if (text != null && text.startsWith("video")) {
                 iv.setImageResource(R.drawable.movie);
             } else {
                 iv.setImageResource(0);

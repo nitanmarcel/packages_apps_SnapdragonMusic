@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!--
+<?xml version="1.0" encoding="UTF-8"?><!--
 /*
 ** Copyright 2007, The Android Open Source Project
 **
@@ -17,8 +16,7 @@
 */
  -->
 
-<resources xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="onesong" msgid="8336826100414159413">"1 首歌曲"</string>
     <!-- no translation found for Nsongs (8315784110177671046) -->
     <!-- no translation found for Nsongscomp (2294119757581588619) -->
@@ -120,20 +118,20 @@
     <string name="service_start_error_title" msgid="8649916852210198813">"播放问题"</string>
     <string name="service_start_error_msg" msgid="7061754255330276478">"无法播放此歌曲。"</string>
     <string name="service_start_error_button" msgid="480888406592240723">"确定"</string>
-  <string-array name="weeklist">
-    <item msgid="7005918873419323862">"1 周"</item>
-    <item msgid="7487749116155425822">"2 周"</item>
-    <item msgid="1565338360539555185">"3 周"</item>
-    <item msgid="2142986059836933072">"4 周"</item>
-    <item msgid="4332403875260507291">"5 周"</item>
-    <item msgid="3847281907869868565">"6 周"</item>
-    <item msgid="2942654998558867799">"7 周"</item>
-    <item msgid="2115529325850052227">"8 周"</item>
-    <item msgid="1396675336665198092">"9 周"</item>
-    <item msgid="3178819129208998649">"10 周"</item>
-    <item msgid="2727959579637914171">"11 周"</item>
-    <item msgid="8708754966127584739">"12 周"</item>
-  </string-array>
+    <string-array name="weeklist">
+        <item msgid="7005918873419323862">"1 周"</item>
+        <item msgid="7487749116155425822">"2 周"</item>
+        <item msgid="1565338360539555185">"3 周"</item>
+        <item msgid="2142986059836933072">"4 周"</item>
+        <item msgid="4332403875260507291">"5 周"</item>
+        <item msgid="3847281907869868565">"6 周"</item>
+        <item msgid="2942654998558867799">"7 周"</item>
+        <item msgid="2115529325850052227">"8 周"</item>
+        <item msgid="1396675336665198092">"9 周"</item>
+        <item msgid="3178819129208998649">"10 周"</item>
+        <item msgid="2727959579637914171">"11 周"</item>
+        <item msgid="8708754966127584739">"12 周"</item>
+    </string-array>
     <string name="weekpicker_set" msgid="7636608790418067496">"完成"</string>
     <string name="weekpicker_title" msgid="699535378922101701">"设置时间"</string>
     <string name="save_as_playlist" msgid="5180413608901885255">"另存为播放列表"</string>
@@ -160,7 +158,7 @@
     <string name="music_picker_title" msgid="4143865470317360605">"选择音乐曲目"</string>
     <string name="search_settings_description" msgid="6520975349259883368">"音乐人、专辑和曲目"</string>
     <string name="search_hint" msgid="3766854898072633001">"搜索音乐"</string>
-    <string name="search_hint_video" >"搜索视频"</string>
+    <string name="search_hint_video">"搜索视频"</string>
     <string name="fast_scroll_alphabet" msgid="5548732936480723311">" ABCDEFGHIJKLMNOPQRSTUVWXYZ"</string>
     <string name="widget_initial_text" msgid="3166878738860903586">"触摸可选择音乐。"</string>
     <string name="effectspanel" msgid="8804547581593509614">"音效"</string>

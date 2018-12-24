@@ -19,66 +19,60 @@ package com.android.music;
 import android.Manifest;
 import android.app.ListActivity;
 import android.app.SearchManager;
+import android.content.ActivityNotFoundException;
 import android.content.ContentResolver;
 import android.content.ContentUris;
-import android.content.ContentValues;
 import android.content.Intent;
-import android.content.ActivityNotFoundException;
 import android.database.Cursor;
-//import android.drm.DrmManagerClientWrapper;
-import android.drm.DrmRights;
-import android.drm.DrmStore.Action;
-//import android.drm.DrmStore.DrmDeliveryType;
-import android.drm.DrmStore.RightsStatus;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
-import android.util.Log;
 import android.text.TextUtils;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
+import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.KeyEvent;
 import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.ListView;
 import android.widget.SimpleCursorAdapter;
 import android.widget.Toast;
 
-import com.codeaurora.music.custom.PermissionActivity;
+import com.android.music.custom.PermissionActivity;
 
-import java.lang.Integer;
+//import android.drm.DrmManagerClientWrapper;
+//import android.drm.DrmStore.DrmDeliveryType;
 
-public class VideoBrowserActivity extends ListActivity implements MusicUtils.Defs
-{
+public class VideoBrowserActivity extends ListActivity implements MusicUtils.Defs {
+    public static final String BUY_LICENSE = "android.drmservice.intent.action.BUY_LICENSE";
     private static final String[] REQUIRED_PERMISSIONS = {
             Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.WRITE_EXTERNAL_STORAGE};
-    private int mSelectedPosition; // Position of selected view
     private static final int SHARE = 0; // Menu to share video
     private static final int DELETE = 1; // Menu to delete video
-    private String mFilterString = "";
-    private boolean mIsDeleteVideoItem = false;
-
+    private static final String LOGTAG = "VideoBrowser";
     private static String EXTRA_ALL_VIDEO_FOLDER = "org.codeaurora.intent.extra.ALL_VIDEO_FOLDER";
     private static String EXTRA_ORDERBY = "org.codeaurora.intent.extra.VIDEO_LIST_ORDERBY";
     private static String DELETE_VIDEO_ITEM = "delete.video.file";
-
+    private int mSelectedPosition; // Position of selected view
+    private String mFilterString = "";
+    private boolean mIsDeleteVideoItem = false;
     private String mCurrentVideoName;
     private String mCurrentVideoPath;
-    private static final String LOGTAG = "VideoBrowser";
-    public static final String BUY_LICENSE = "android.drmservice.intent.action.BUY_LICENSE";
+    private Cursor mCursor;
+    private String mWhereClause;
+    private String mSortOrder;
 
-    public VideoBrowserActivity()
-    {
+    public VideoBrowserActivity() {
     }
 
-    /** Called when the activity is first created. */
+    /**
+     * Called when the activity is first created.
+     */
     @Override
-    public void onCreate(Bundle icicle)
-    {
+    public void onCreate(Bundle icicle) {
         if (PermissionActivity.checkAndRequestPermission(this, REQUIRED_PERMISSIONS)) {
             SysApplication.getInstance().exit();
         }
@@ -117,10 +111,10 @@ public class VideoBrowserActivity extends ListActivity implements MusicUtils.Def
 
     @Override
     public void onCreateContextMenu(ContextMenu menu, View v,
-            ContextMenuInfo menuInfo) {
+                                    ContextMenuInfo menuInfo) {
         // Get position of selected view
         AdapterContextMenuInfo mi = (AdapterContextMenuInfo) menuInfo;
-        mSelectedPosition =  mi.position;
+        mSelectedPosition = mi.position;
 
         // Set menu title
         if (null == mCursor) {
@@ -183,7 +177,7 @@ public class VideoBrowserActivity extends ListActivity implements MusicUtils.Def
                         (MediaStore.Video.Media._ID));
                 Uri videoUri = ContentUris.withAppendedId(MediaStore.Video.Media
                         .EXTERNAL_CONTENT_URI, videoId);
-                String videoTitle= mCursor.getString(mCursor.getColumnIndexOrThrow
+                String videoTitle = mCursor.getString(mCursor.getColumnIndexOrThrow
                         (MediaStore.Video.Media.TITLE));
                 String videoName = getString(R.string.delete_video_item_message,
                         videoTitle);
@@ -227,15 +221,14 @@ public class VideoBrowserActivity extends ListActivity implements MusicUtils.Def
                 this,
                 android.R.layout.simple_list_item_1,
                 mCursor,
-                new String[] { MediaStore.Video.Media.TITLE},
-                new int[] { android.R.id.text1 });
+                new String[]{MediaStore.Video.Media.TITLE},
+                new int[]{android.R.id.text1});
 
         setListAdapter(adapter);
     }
 
     @Override
-    protected void onListItemClick(ListView l, View v, int position, long id)
-    {
+    protected void onListItemClick(ListView l, View v, int position, long id) {
         Intent intent = new Intent(Intent.ACTION_VIEW);
         mCursor.moveToPosition(position);
         String type = mCursor.getString(mCursor.getColumnIndexOrThrow(MediaStore.Video.Media.MIME_TYPE));
@@ -272,7 +265,7 @@ public class VideoBrowserActivity extends ListActivity implements MusicUtils.Def
     }
 
     private void MakeCursor() {
-        String[] cols = new String[] {
+        String[] cols = new String[]{
                 MediaStore.Video.Media._ID,
                 MediaStore.Video.Media.TITLE,
                 MediaStore.Video.Media.DATA,
@@ -284,13 +277,13 @@ public class VideoBrowserActivity extends ListActivity implements MusicUtils.Def
             System.out.println("resolver = null");
         } else {
             mSortOrder = MediaStore.Video.Media.TITLE + " COLLATE UNICODE";
-            if (TextUtils.isEmpty(mFilterString)){
+            if (TextUtils.isEmpty(mFilterString)) {
                 mWhereClause = MediaStore.Video.Media.TITLE + " != ''";
-            }else{
-                mWhereClause = MediaStore.Video.Media.TITLE + " like '%"+mFilterString+"%'";
+            } else {
+                mWhereClause = MediaStore.Video.Media.TITLE + " like '%" + mFilterString + "%'";
             }
             mCursor = resolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                cols, mWhereClause , null, mSortOrder);
+                    cols, mWhereClause, null, mSortOrder);
         }
     }
 
@@ -319,9 +312,5 @@ public class VideoBrowserActivity extends ListActivity implements MusicUtils.Def
         }
         return super.dispatchKeyEvent(event);
     }
-
-    private Cursor mCursor;
-    private String mWhereClause;
-    private String mSortOrder;
 }
 

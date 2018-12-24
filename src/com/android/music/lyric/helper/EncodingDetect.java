@@ -27,19 +27,17 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.codeaurora.music.lyric.helper;
+package com.android.music.lyric.helper;
 
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.lang.reflect.Array;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-
-import android.util.Log;
 
 public class EncodingDetect {
     private static final String GBK = "GBK";
@@ -50,18 +48,15 @@ public class EncodingDetect {
     private static final String UTF_32BE = "UTF-32BE";
     private static final String UTF_32LE = "UTF-32LE";
     private static final int READ_BYTES_LENGTH = 128;
-
+    byte[] mByteArray = null;
     private ArrayList<EncodingDetectInterface> mEncodingDetectArray
             = new ArrayList<EncodingDetectInterface>();
-    byte[] mByteArray = null;
-
-    public interface EncodingDetectInterface {
-        public boolean guestEncoding(byte[] bytes);
-
-        public String getEncoding();
-    }
 
     private EncodingDetect() {
+    }
+
+    public static final EncodingDetect getInstance() {
+        return SingletonHolder.mEncodingDetect;
     }
 
     public String getJavaEncode(File file) {
@@ -74,8 +69,8 @@ public class EncodingDetect {
             int lineSize = 0;
             for (byte tmp : mByteArray) {
                 lineSize++;
-                if (tmp == 13 || tmp== 10) {
-                   break;
+                if (tmp == 13 || tmp == 10) {
+                    break;
                 }
             }
             byte[] line = new byte[lineSize];
@@ -98,14 +93,6 @@ public class EncodingDetect {
         return Charset.defaultCharset().name();
     }
 
-    private static class SingletonHolder {
-        private static final EncodingDetect mEncodingDetect = new EncodingDetect();
-    }
-
-    public static final EncodingDetect getInstance() {
-        return SingletonHolder.mEncodingDetect;
-    }
-
     public void init() {
         mEncodingDetectArray.clear();
         mEncodingDetectArray.add(new UTF8EncodingDetect());
@@ -117,14 +104,25 @@ public class EncodingDetect {
         mEncodingDetectArray.add(new GBKEncodingDetect());
     }
 
+    public void release() {
+        mEncodingDetectArray.clear();
+    }
+
+    public interface EncodingDetectInterface {
+        boolean guestEncoding(byte[] bytes);
+
+        String getEncoding();
+    }
+
+    private static class SingletonHolder {
+        private static final EncodingDetect mEncodingDetect = new EncodingDetect();
+    }
+
     private class UTF8EncodingDetect implements EncodingDetectInterface {
         @Override
         public boolean guestEncoding(byte[] bytes) {
-            if (bytes[0] == (byte) 0xEF && bytes[1] == (byte) 0xBB
-                    && bytes[2] == (byte) 0xBF) {
-                return true;
-            }
-            return false;
+            return bytes[0] == (byte) 0xEF && bytes[1] == (byte) 0xBB
+                    && bytes[2] == (byte) 0xBF;
         }
 
         @Override
@@ -136,10 +134,7 @@ public class EncodingDetect {
     private class UnicodeEncodingDetect implements EncodingDetectInterface {
         @Override
         public boolean guestEncoding(byte[] bytes) {
-            if (bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xFE) {
-                return true;
-            }
-            return false;
+            return bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xFE;
         }
 
         @Override
@@ -151,10 +146,7 @@ public class EncodingDetect {
     private class UTF_16BEEncodingDetect implements EncodingDetectInterface {
         @Override
         public boolean guestEncoding(byte[] bytes) {
-            if (bytes[0] == (byte) 0xFE && bytes[1] == (byte) 0xFF) {
-                return true;
-            }
-            return false;
+            return bytes[0] == (byte) 0xFE && bytes[1] == (byte) 0xFF;
         }
 
         @Override
@@ -166,10 +158,7 @@ public class EncodingDetect {
     private class UTF_16LEEncodingDetect implements EncodingDetectInterface {
         @Override
         public boolean guestEncoding(byte[] bytes) {
-            if (bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xFE) {
-                return true;
-            }
-            return false;
+            return bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xFE;
         }
 
         @Override
@@ -181,11 +170,8 @@ public class EncodingDetect {
     private class UTF_32BEEncodingDetect implements EncodingDetectInterface {
         @Override
         public boolean guestEncoding(byte[] bytes) {
-            if ((bytes[0] == (byte) 0x00) && (bytes[1] == (byte) 0x00)
-                    && (bytes[2] == (byte) 0xFE) && (bytes[3] == (byte) 0xFF)) {
-                return true;
-            }
-            return false;
+            return (bytes[0] == (byte) 0x00) && (bytes[1] == (byte) 0x00)
+                    && (bytes[2] == (byte) 0xFE) && (bytes[3] == (byte) 0xFF);
         }
 
         @Override
@@ -197,11 +183,8 @@ public class EncodingDetect {
     private class UTF_32LEEncodingDetect implements EncodingDetectInterface {
         @Override
         public boolean guestEncoding(byte[] bytes) {
-            if ((bytes[0] == (byte) 0xFF) && (bytes[1] == (byte) 0xFE)
-                    && (bytes[2] == (byte) 0x00) && (bytes[3] == (byte) 0x00)) {
-                return true;
-            }
-            return false;
+            return (bytes[0] == (byte) 0xFF) && (bytes[1] == (byte) 0xFE)
+                    && (bytes[2] == (byte) 0x00) && (bytes[3] == (byte) 0x00);
         }
 
         @Override
@@ -214,10 +197,10 @@ public class EncodingDetect {
         @Override
         public boolean guestEncoding(byte[] bytes) {
             try {
-                String strGBK = new String(bytes,GBK);
-                String strUTF = new String(bytes,UTF_8);
-                String strGBKToUTF = new String(strGBK.getBytes(GBK),UTF_8);
-                String strUTFToGBK = new String(strUTF.getBytes(UTF_8),GBK);
+                String strGBK = new String(bytes, GBK);
+                String strUTF = new String(bytes, StandardCharsets.UTF_8);
+                String strGBKToUTF = new String(strGBK.getBytes(GBK), StandardCharsets.UTF_8);
+                String strUTFToGBK = new String(strUTF.getBytes(StandardCharsets.UTF_8), GBK);
                 if (strUTF.equals(strGBKToUTF) && !strGBK.equals(strUTFToGBK)) {
                     return true;
                 }
@@ -231,10 +214,6 @@ public class EncodingDetect {
         public String getEncoding() {
             return GBK;
         }
-    }
-
-    public void release() {
-        mEncodingDetectArray.clear();
     }
 }
 

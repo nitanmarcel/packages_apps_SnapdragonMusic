@@ -16,8 +16,6 @@
 
 package com.android.music;
 
-import com.android.music.MusicUtils.ServiceToken;
-
 import android.animation.Animator;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
@@ -39,10 +37,10 @@ import android.content.res.Configuration;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
-import android.media.audiofx.AudioEffect;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.MediaPlayer.OnCompletionListener;
+import android.media.audiofx.AudioEffect;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -53,9 +51,6 @@ import android.os.Message;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.provider.MediaStore;
-import android.telephony.SubscriptionInfo;
-import android.telephony.SubscriptionManager;
-import android.telephony.TelephonyManager;
 import android.text.Layout;
 import android.text.TextUtils;
 import android.text.TextUtils.TruncateAt;
@@ -67,33 +62,34 @@ import android.view.MotionEvent;
 import android.view.SubMenu;
 import android.view.TouchDelegate;
 import android.view.View;
+import android.view.View.OnClickListener;
 import android.view.ViewAnimationUtils;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.Window;
-import android.view.View.OnClickListener;
 import android.view.animation.AccelerateInterpolator;
 import android.widget.AbsListView;
+import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.FrameLayout;
 import android.widget.PopupMenu;
 import android.widget.PopupMenu.OnMenuItemClickListener;
 import android.widget.ProgressBar;
 import android.widget.SeekBar;
+import android.widget.SeekBar.OnSeekBarChangeListener;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.Toolbar;
-import android.widget.SeekBar.OnSeekBarChangeListener;
 
-import com.codeaurora.music.custom.FragmentsFactory;
-import com.codeaurora.music.custom.MusicPanelLayout;
-import com.codeaurora.music.custom.MusicPanelLayout.BoardState;
-import com.codeaurora.music.lyric.Lyric;
-import com.codeaurora.music.lyric.LyricAdapter;
-import com.codeaurora.music.lyric.LyricView;
-import com.codeaurora.music.lyric.PlayListItem;
+import com.android.music.MusicUtils.ServiceToken;
+import com.android.music.custom.FragmentsFactory;
+import com.android.music.custom.MusicPanelLayout;
+import com.android.music.custom.MusicPanelLayout.BoardState;
+import com.android.music.lyric.Lyric;
+import com.android.music.lyric.LyricAdapter;
+import com.android.music.lyric.LyricView;
+import com.android.music.lyric.PlayListItem;
 
 import java.io.File;
 import java.util.Locale;
@@ -101,12 +97,68 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
-        ServiceConnection, OnCompletionListener, AbsListView.OnScrollListener{
+        ServiceConnection, OnCompletionListener, AbsListView.OnScrollListener {
+    public static final String SRC_PATH = "/Music/lrc/";
     private static final int SAVE_AS_PLAYLIST = CHILD_MENU_BASE + 2;
     private static final int CLEAR_PLAYLIST = CHILD_MENU_BASE + 4;
     private static final int INVALID_PLAYLIST_ID = -1;
-
     private static final String TAG = "MediaPlaybackActivity";
+    private static final int STATUS_DISABLE = 0;
+    private static final int STATUS_PORT_UNSELECTED = 1;
+    private static final int STATUS_LAND_UNSELECTED = 2;
+    private static final int STATUS_SELECTED = 3;
+    private static final int SWITCH_MUSIC_MAX_TIME = 2000;
+    private static final int REFRESH = 1;
+    private static final int QUIT = 2;
+    private static final int GET_ALBUM_ART = 3;
+    private static final int ALBUM_ART_DECODED = 4;
+    private static final int GO_PRE = 5;
+    private static final int GO_NEXT = 6;
+    private static final int REFRESH_LYRIC = 1;
+    private static final long REFRESH_MILLIONS = 500;
+    private static final int LYRIC_SCROLL_INTERVAL = 150;
+    private static final int ENTER_LYRIC_ANIMAL_INTERVAL = 200;
+    private static MediaPlaybackActivity mActivity;
+    private final Timer mResumeTimer = new Timer("resumeTimer");
+    private final int[][] keyboard = {
+            {KeyEvent.KEYCODE_Q, KeyEvent.KEYCODE_W, KeyEvent.KEYCODE_E,
+                    KeyEvent.KEYCODE_R, KeyEvent.KEYCODE_T, KeyEvent.KEYCODE_Y,
+                    KeyEvent.KEYCODE_U, KeyEvent.KEYCODE_I, KeyEvent.KEYCODE_O,
+                    KeyEvent.KEYCODE_P,},
+            {KeyEvent.KEYCODE_A, KeyEvent.KEYCODE_S, KeyEvent.KEYCODE_D,
+                    KeyEvent.KEYCODE_F, KeyEvent.KEYCODE_G, KeyEvent.KEYCODE_H,
+                    KeyEvent.KEYCODE_J, KeyEvent.KEYCODE_K, KeyEvent.KEYCODE_L,
+                    KeyEvent.KEYCODE_DEL,},
+            {KeyEvent.KEYCODE_Z, KeyEvent.KEYCODE_X, KeyEvent.KEYCODE_C,
+                    KeyEvent.KEYCODE_V, KeyEvent.KEYCODE_B, KeyEvent.KEYCODE_N,
+                    KeyEvent.KEYCODE_M, KeyEvent.KEYCODE_COMMA,
+                    KeyEvent.KEYCODE_PERIOD, KeyEvent.KEYCODE_ENTER}
+
+    };
+    public ImageView mNowPlayingIcon;
+    public Toolbar mToolbar;
+    public boolean mIsPanelExpanded = false;
+    Fragment mFragment;
+    int mInitialX = -1;
+    int mLastX = -1;
+    int mTextWidth = 0;
+    int mViewWidth = 0;
+    boolean mDraggingLabel = false;
+    Handler mLabelScroller = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            TextView tv = (TextView) msg.obj;
+            int x = tv.getScrollX();
+            x = x * 3 / 4;
+            tv.scrollTo(x, 0);
+            if (x == 0) {
+                tv.setEllipsize(TruncateAt.END);
+            } else {
+                Message newmsg = obtainMessage(0, tv);
+                mLabelScroller.sendMessageDelayed(newmsg, 15);
+            }
+        }
+    };
     private boolean mSeeking = false;
     private boolean mDeviceHasDpad;
     private long mStartSeekPos = 0;
@@ -114,24 +166,20 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
     private IMediaPlaybackService mService = null;
     private RepeatingImageButton mPrevButton;
     private ImageButton mPauseButton;
-    public ImageView mNowPlayingIcon;
     private RepeatingImageButton mNextButton;
     private ImageButton mRepeatButton;
     private ImageButton mShuffleButton;
     private ImageButton mCurrentPlaylist;
     private FrameLayout mQueueLayout;
-    public Toolbar mToolbar;
     private Worker mAlbumArtWorker;
     private AlbumArtHandler mAlbumArtHandler;
     private Toast mToast;
     private int mTouchSlop;
     private ServiceToken mToken;
     private boolean mReceiverUnregistered = true;
-    private static MediaPlaybackActivity mActivity;
     private MusicPanelLayout mSlidingPanelLayout;
     private ImageButton mMenuOverFlow;
     private View mNowPlayingView;
-    Fragment mFragment;
     private boolean isBackPressed = false;
     private boolean mCheckIfSeekRequired = false;
     private ImageView mFavoriteIcon;
@@ -139,6 +187,13 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
     private LinearLayout mLandControlPanel;
     private LinearLayout mAudioPlayerBody;
     private LyricView mLyricView;
+    Runnable mUpdateResults = new Runnable() {
+        public void run() {
+            if (mLyricView != null) {
+                mLyricView.invalidate();
+            }
+        }
+    };
     private View mLyricPanel;
     private LyricAdapter mLyricAdapter;
     private PlayListItem mCurPlayListItem;
@@ -153,23 +208,396 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
     private int mLyricSrollState = SCROLL_STATE_IDLE;
     private String mStrTrackName = null;
     private ResumeScrollTask mResumeScrollTask;
-    private final Timer mResumeTimer = new Timer("resumeTimer");
     private PopupMenu mPopupMenu;
-
-    private static final int STATUS_DISABLE = 0;
-    private static final int STATUS_PORT_UNSELECTED = 1;
-    private static final int STATUS_LAND_UNSELECTED = 2;
-    private static final int STATUS_SELECTED = 3;
-
-    private static final int SWITCH_MUSIC_MAX_TIME = 2000;
     private int mLyricIconStatus;
-    public boolean mIsPanelExpanded = false;
+    private View.OnClickListener mFavoriteListener = new View.OnClickListener() {
+        public void onClick(View v) {
+            long audioid;
+            try {
+                audioid = mService.getAudioId();
+            } catch (Exception ex) {
+                return;
+            }
+
+            int playlistId = MusicUtils.idForplaylist(MediaPlaybackActivity.this, "My Favorite");
+            int memberId = getMemberId(playlistId, audioid);
+            if (memberId == -1) {
+                addToFavoritePlaylist(playlistId, audioid);
+            } else {
+                removeFromPlaylist(playlistId, memberId);
+            }
+        }
+    };
+    private View.OnClickListener mSoundEffectListener = new View.OnClickListener() {
+        public void onClick(View v) {
+            MusicUtils.startSoundEffectActivity(MediaPlaybackActivity.this);
+        }
+    };
+    private View.OnClickListener mPrevListener = new View.OnClickListener() {
+        public void onClick(View v) {
+            if (mService == null)
+                return;
+            sendIsRespondMessage(GO_PRE);
+        }
+    };
+    private View.OnClickListener mNextListener = new View.OnClickListener() {
+        public void onClick(View v) {
+            if (mService == null)
+                return;
+            sendIsRespondMessage(GO_NEXT);
+        }
+    };
+    private View.OnClickListener mPopUpMenuListener = new View.OnClickListener() {
+        public void onClick(View v) {
+            if (mPopupMenu != null) {
+                mPopupMenu.dismiss();
+            }
+            PopupMenu popup = new PopupMenu(mActivity, mMenuOverFlow);
+            // icon will be set in onPrepareOptionsMenu()
+            popup.getMenu()
+                    .add(0, SAVE_AS_PLAYLIST, 0, R.string.save_as_playlist)
+                    .setIcon(android.R.drawable.ic_menu_save);
+            popup.getMenu().add(0, CLEAR_PLAYLIST, 0, R.string.clear_playlist)
+                    .setIcon(R.drawable.ic_menu_clear_playlist);
+            popup.show();
+            popup.setOnMenuItemClickListener(new OnMenuItemClickListener() {
+
+                @Override
+                public boolean onMenuItemClick(MenuItem item) {
+                    onOptionsItemSelected(item);
+                    return true;
+                }
+            });
+            mPopupMenu = popup;
+        }
+    };
+    private View.OnClickListener mActiveButtonPopUpMenuListener = new View.OnClickListener() {
+        public void onClick(View v) {
+            if (mPopupMenu != null) {
+                mPopupMenu.dismiss();
+            }
+            PopupMenu popup = new PopupMenu(mActivity, mMenuOverFlow);
+            // icon will be set in onPrepareOptionsMenu()
+            SubMenu sub = popup.getMenu().addSubMenu(0,
+                    ADD_TO_PLAYLIST, 0, R.string.add_to_playlist);
+            MusicUtils.makePlaylistMenu(MediaPlaybackActivity.this, sub);
+            MusicUtils.addSetRingtonMenu(popup.getMenu());
+            Intent i = new Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL);
+            if (getPackageManager().resolveActivity(i, 0) != null) {
+                popup.getMenu().add(0, EFFECTS_PANEL, 0, R.string.effectspanel);
+            }
+            popup.getMenu()
+                    .add(0, DELETE_ITEM, 0, R.string.delete_item);
+            popup.show();
+            popup.setOnMenuItemClickListener(new OnMenuItemClickListener() {
+
+                @Override
+                public boolean onMenuItemClick(MenuItem item) {
+                    onOptionsItemSelected(item);
+                    return true;
+                }
+            });
+            mPopupMenu = popup;
+        }
+    };
+    private int lastX;
+    private int lastY;
+    private Handler mToastHandler = new Handler();
+    private Runnable mRun = new Runnable() {
+        public void run() {
+            mToast.cancel();
+        }
+    };
+    private View.OnClickListener mShuffleListener = new View.OnClickListener() {
+        public void onClick(View v) {
+            toggleShuffle();
+        }
+    };
+    private View.OnClickListener mRepeatListener = new View.OnClickListener() {
+        public void onClick(View v) {
+            cycleRepeat();
+        }
+    };
+    private BroadcastReceiver mTrackListListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            try {
+                if (mService != null) {
+                    if (mService.getAudioId() >= 0 || mService.isPlaying()
+                            || mService.getPath() != null) {
+                        mNowPlayingView.setVisibility(View.VISIBLE);
+                        if (mSlidingPanelLayout.getHookState() != BoardState.EXPANDED
+                                && (mSlidingPanelLayout.getHookState() != BoardState.COLLAPSED)) {
+                            mSlidingPanelLayout
+                                    .setHookState(BoardState.COLLAPSED);
+                        }
+                    }
+                }
+            } catch (RemoteException e) {
+                Log.e(TAG, "Error caught");
+            }
+            updateNowPlaying(MediaPlaybackActivity.this);
+        }
+    };
+    private ImageView mAlbum;
+    private ImageView mAlbumIcon;
+    private TextView mCurrentTime;
+    private TextView mTotalTime;
+    private TextView mArtistName;
+    private TextView mTrackName;
+    private ProgressBar mProgress;
+    private long mPosOverride = -1;
+    private boolean mFromTouch = false;
+    private long mDuration;
+    public View.OnClickListener mPauseListener = new View.OnClickListener() {
+        public void onClick(View v) {
+            doPauseResume();
+        }
+    };
+    private OnSeekBarChangeListener mSeekListener = new OnSeekBarChangeListener() {
+        public void onStartTrackingTouch(SeekBar bar) {
+            mLastSeekEventTime = 0;
+            mFromTouch = true;
+            mCheckIfSeekRequired = false;
+        }
+
+        public void onProgressChanged(SeekBar bar, int progress,
+                                      boolean fromuser) {
+            if (!fromuser || (mService == null))
+                return;
+            mCheckIfSeekRequired = true;
+            long now = SystemClock.elapsedRealtime();
+            mPosOverride = mDuration * progress / 1000;
+            if ((now - mLastSeekEventTime) > 10) {
+                mLastSeekEventTime = now;
+
+                // trackball event, allow progress updates
+                if (!mFromTouch) {
+                    refreshNow();
+                    mPosOverride = -1;
+                }
+            }
+        }
+
+        public void onStopTrackingTouch(SeekBar bar) {
+            try {
+                if (null != mService && mCheckIfSeekRequired) {
+                    mService.seek(mPosOverride);
+                }
+            } catch (RemoteException ex) {
+            }
+            mPosOverride = -1;
+            mFromTouch = false;
+        }
+    };
+    private RepeatingImageButton.RepeatListener mRewListener = new RepeatingImageButton.RepeatListener() {
+        public void onRepeat(View v, long howlong, int repcnt) {
+            scanBackward(repcnt, howlong);
+        }
+    };
+    private RepeatingImageButton.RepeatListener mFfwdListener = new RepeatingImageButton.RepeatListener() {
+        public void onRepeat(View v, long howlong, int repcnt) {
+            scanForward(repcnt, howlong);
+        }
+    };
+    private int seekmethod;
+    private boolean paused;
+    private final Handler mHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case ALBUM_ART_DECODED:
+                    if (msg.obj != null && msg.obj instanceof Bitmap) {
+                        mAlbum.setImageBitmap((Bitmap) msg.obj);
+                        mAlbum.getDrawable().setDither(true);
+                        mAlbumIcon.setImageBitmap((Bitmap) msg.obj);
+                        mAlbumIcon.getDrawable().setDither(true);
+                    } else {
+                        mAlbum.setImageResource(R.drawable.album_cover_background);
+                        mAlbum.getDrawable().setDither(true);
+                        mAlbumIcon.setImageResource(R.drawable.album_cover_background);
+                        mAlbumIcon.getDrawable().setDither(true);
+                    }
+                    break;
+
+                case REFRESH:
+                    long next = refreshNow();
+                    queueNextRefresh(next);
+                    break;
+
+                case QUIT:
+                    // This can be moved back to onCreate once the bug that prevents
+                    // Dialogs from being started from onCreate/onResume is fixed.
+                    new AlertDialog.Builder(MediaPlaybackActivity.this)
+                            .setTitle(R.string.service_start_error_title)
+                            .setMessage(R.string.service_start_error_msg)
+                            .setPositiveButton(R.string.service_start_error_button,
+                                    new DialogInterface.OnClickListener() {
+                                        public void onClick(DialogInterface dialog,
+                                                            int whichButton) {
+                                            finish();
+                                        }
+                                    }).setCancelable(false).show();
+                    break;
+                case GO_PRE:
+                    try {
+                        int shuffle = mService.getShuffleMode();
+                        int histSize = mService.getHistSize();
+                        if (isGoStart(shuffle, histSize)) {
+                            mService.seek(0);
+                            mService.play();
+                        } else {
+                            mService.prev();
+                        }
+                    } catch (RemoteException ex) {
+                        ex.printStackTrace();
+                    }
+                    break;
+                case GO_NEXT:
+                    try {
+                        mService.next();
+                    } catch (RemoteException ex) {
+                        ex.printStackTrace();
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+        }
+    };
+    public Handler mLyricHandler = new Handler() {
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case REFRESH_LYRIC:
+                    try {
+                        if (mService != null && mLyric != null) {
+                            updateDuration(mService.position());
+                        }
+                    } catch (RemoteException e) {
+                        // TODO Auto-generated catch block
+                    }
+                    if (mHasLrc) {
+                        queueNextRefreshForLyric(REFRESH_MILLIONS);
+                    }
+                    break;
+            }
+        }
+    };
+    private View.OnClickListener mQueueListener = new View.OnClickListener() {
+        public void onClick(View v) {
+            MusicBrowserActivity.mIsparentActivityFInishing = true;
+            if (mAlbumIcon.getVisibility() == View.GONE) {
+                mSlidingPanelLayout.mIsQueueEnabled = false;
+                mAlbumIcon.setVisibility(View.VISIBLE);
+                mLyricIcon.setVisibility(View.VISIBLE);
+                mFavoriteIcon.setVisibility(View.VISIBLE);
+                mMenuOverFlow.setOnClickListener(mActiveButtonPopUpMenuListener);
+                mCurrentPlaylist.setImageResource(R.drawable.list);
+                if (mFragment != null) {
+                    MusicUtils.isFragmentRemoved = true;
+                    getFragmentManager().beginTransaction().remove(mFragment)
+                            .commit();
+                }
+                if (mHasLrc && mIsLyricDisplay) {
+                    mLyricPanel.setVisibility(View.VISIBLE);
+                    queueNextRefreshForLyric(REFRESH_MILLIONS);
+                    setLyricIconImage();
+                }
+                if (mLandControlPanel != null) {
+                    mLandControlPanel.setVisibility(View.VISIBLE);
+                }
+            } else {
+                MusicUtils.isFragmentRemoved = false;
+                mSlidingPanelLayout.mIsQueueEnabled = true;
+                mAlbumIcon.setVisibility(View.GONE);
+                mLyricIcon.setVisibility(View.GONE);
+                mFavoriteIcon.setVisibility(View.GONE);
+                mCurrentPlaylist.setImageResource(R.drawable.list_active);
+                mMenuOverFlow.setOnClickListener(mPopUpMenuListener);
+                mFragment = new TrackBrowserFragment();
+                Bundle args = new Bundle();
+                args.putString("playlist", "nowplaying");
+                args.putBoolean("editValue", true);
+                mFragment.setArguments(args);
+                getFragmentManager()
+                        .beginTransaction()
+                        .add(R.id.current_queue_view, mFragment,
+                                "track_fragment").commit();
+                if (mHasLrc) {
+                    mLyricPanel.setVisibility(View.GONE);
+                    stopQueueNextRefreshForLyric();
+                }
+                if (mLandControlPanel != null) {
+                    mLandControlPanel.setVisibility(View.GONE);
+                }
+            }
+        }
+    };
+    private BroadcastReceiver mStatusListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (action.equals(MediaPlaybackService.META_CHANGED)) {
+                mMetaChanged = true;
+                // redraw the artist/title info and
+                // set new max for progress bar
+                updateTrackInfo();
+                setPauseButtonImage();
+            } else if (action.equals(MediaPlaybackService.PLAYSTATE_CHANGED)) {
+                setPauseButtonImage();
+            } else if (action.equals(MediaPlaybackService.SHUFFLE_CHANGED)) {
+                setShuffleButtonImage();
+            } else if (action.equals(MediaPlaybackService.REPEAT_CHANGED)) {
+                setRepeatButtonImage();
+            }
+        }
+    };
+    private BroadcastReceiver mScreenTimeoutListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (Intent.ACTION_SCREEN_ON.equals(intent.getAction())) {
+                if (mReceiverUnregistered) {
+                    IntentFilter f = new IntentFilter();
+                    f.addAction(MediaPlaybackService.PLAYSTATE_CHANGED);
+                    f.addAction(MediaPlaybackService.META_CHANGED);
+                    f.addAction(MediaPlaybackService.SHUFFLE_CHANGED);
+                    f.addAction(MediaPlaybackService.REPEAT_CHANGED);
+                    registerReceiver(mStatusListener, f);
+                    mReceiverUnregistered = false;
+                }
+                paused = false;
+
+                if (mPosOverride > 0) {
+                    mPosOverride = -1;
+                }
+                updateTrackInfo();
+                long next = refreshNow();
+                queueNextRefresh(next);
+            } else if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
+                paused = false;
+
+                if (!mReceiverUnregistered) {
+                    mHandler.removeMessages(REFRESH);
+                    unregisterReceiver(mStatusListener);
+                    mReceiverUnregistered = true;
+                }
+            }
+        }
+    };
 
     public MediaPlaybackActivity() {
     }
 
     public static MediaPlaybackActivity getInstance() {
         return mActivity;
+    }
+
+    public static int getStatusBarHeight() {
+        Rect rectangle = new Rect();
+        Window window = MediaPlaybackActivity.getInstance().getWindow();
+        window.getDecorView().getWindowVisibleDisplayFrame(rectangle);
+        return rectangle.top;
     }
 
     public View getNowPlayingView() {
@@ -180,7 +608,9 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         return mSlidingPanelLayout;
     }
 
-    /** Called when the activity is first created. */
+    /**
+     * Called when the activity is first created.
+     */
     @Override
     public void onCreate(Bundle icicle) {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -198,16 +628,16 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
     }
 
     public void init() {
-        mToolbar = (Toolbar) findViewById(R.id.music_tool_bar);
+        mToolbar = findViewById(R.id.music_tool_bar);
         mNowPlayingView = findViewById(R.id.dragLayout);
-        mSlidingPanelLayout = (MusicPanelLayout) findViewById(R.id.sliding_layout);
-        mNowPlayingIcon = (ImageView) findViewById(R.id.nowplay_icon);
+        mSlidingPanelLayout = findViewById(R.id.sliding_layout);
+        mNowPlayingIcon = findViewById(R.id.nowplay_icon);
         mNowPlayingIcon.setOnClickListener(mPauseListener);
         setTouchDelegate(mNowPlayingIcon);
-        mAlbum = (ImageView) findViewById(R.id.album);
-        mArtistName = (TextView) findViewById(R.id.artist_name);
-        mTrackName = (TextView) findViewById(R.id.song_name);
-        mCurrentPlaylist = (ImageButton) findViewById(R.id.animViewcurrPlaylist);
+        mAlbum = findViewById(R.id.album);
+        mArtistName = findViewById(R.id.artist_name);
+        mTrackName = findViewById(R.id.song_name);
+        mCurrentPlaylist = findViewById(R.id.animViewcurrPlaylist);
         mCurrentPlaylist.setOnClickListener(mQueueListener);
         setTouchDelegate(mCurrentPlaylist);
         seekmethod = 1;
@@ -216,43 +646,43 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
                 = (getResources().getConfiguration().navigation == Configuration.NAVIGATION_DPAD);
 
         mTouchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
-        mMenuOverFlow = (ImageButton) findViewById(R.id.menu_overflow_audio_header);
+        mMenuOverFlow = findViewById(R.id.menu_overflow_audio_header);
         mMenuOverFlow.setOnClickListener(mActiveButtonPopUpMenuListener);
         setTouchDelegate(mMenuOverFlow);
         SysApplication.getInstance().addActivity(this);
         mLyricAdapter = new LyricAdapter(this);
-        mAudioPlayerBody = (LinearLayout)findViewById(R.id.audio_player_body);
+        mAudioPlayerBody = findViewById(R.id.audio_player_body);
         initAudioPlayerBodyView();
     }
 
     private void initAudioPlayerBodyView() {
-        mCurrentTime = (TextView) findViewById(R.id.currenttimer);
-        mTotalTime = (TextView) findViewById(R.id.totaltimer);
-        mProgress = (ProgressBar) findViewById(R.id.progress);
-        mQueueLayout = (FrameLayout) findViewById(R.id.current_queue_view);
-        mFavoriteIcon = (ImageView) findViewById(R.id.favorite);
+        mCurrentTime = findViewById(R.id.currenttimer);
+        mTotalTime = findViewById(R.id.totaltimer);
+        mProgress = findViewById(R.id.progress);
+        mQueueLayout = findViewById(R.id.current_queue_view);
+        mFavoriteIcon = findViewById(R.id.favorite);
         mFavoriteIcon.setVisibility(View.VISIBLE);
         setFavoriteIconImage(getFavoriteStatus());
         mFavoriteIcon.setOnClickListener(mFavoriteListener);
-        mAlbumIcon = (ImageView) findViewById(R.id.album_icon_view);
+        mAlbumIcon = findViewById(R.id.album_icon_view);
         boolean isRtl = TextUtils.getLayoutDirectionFromLocale(Locale.getDefault()) ==
-                            View.LAYOUT_DIRECTION_RTL;
-        mPrevButton = (RepeatingImageButton) findViewById(R.id.previcon);
+                View.LAYOUT_DIRECTION_RTL;
+        mPrevButton = findViewById(R.id.previcon);
         mPrevButton.setOnClickListener(mPrevListener);
         mPrevButton.setRepeatListener(mRewListener, 260);
         mPrevButton.setImageResource(isRtl ? R.drawable.nex : R.drawable.pre);
-        mPauseButton = (ImageButton) findViewById(R.id.play_pause);
+        mPauseButton = findViewById(R.id.play_pause);
         mPauseButton.requestFocus();
         mPauseButton.setOnClickListener(mPauseListener);
-        mNextButton = (RepeatingImageButton) findViewById(R.id.nexticon);
+        mNextButton = findViewById(R.id.nexticon);
         mNextButton.setOnClickListener(mNextListener);
         mNextButton.setRepeatListener(mFfwdListener, 260);
         mNextButton.setImageResource(isRtl ? R.drawable.pre : R.drawable.nex);
         MusicPanelLayout.mSeekBarView = mProgress;
         MusicPanelLayout.mSongsQueueView = mQueueLayout;
-        mShuffleButton = (ImageButton) findViewById(R.id.randomicon);
+        mShuffleButton = findViewById(R.id.randomicon);
         mShuffleButton.setOnClickListener(mShuffleListener);
-        mRepeatButton = (ImageButton) findViewById(R.id.loop_view);
+        mRepeatButton = findViewById(R.id.loop_view);
         mRepeatButton.setOnClickListener(mRepeatListener);
         if (mProgress instanceof SeekBar) {
             SeekBar seeker = (SeekBar) mProgress;
@@ -260,11 +690,11 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         }
         mProgress.setMax(1000);
         mLyricPanel = findViewById(R.id.lyric_panel);
-        mLyricView = (LyricView) findViewById(R.id.lv_lyric);
+        mLyricView = findViewById(R.id.lv_lyric);
         mLyricView.setAdapter(mLyricAdapter);
         mLyricView.setSelection(mFirstVisibleItem);
         mLyricView.setOnScrollListener(this);
-        mLyricIcon = (ImageView) findViewById(R.id.lyric);
+        mLyricIcon = findViewById(R.id.lyric);
         mLyricIcon.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -275,7 +705,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
                 }
             }
         });
-        mLandControlPanel = (LinearLayout)findViewById(R.id.land_control_panel);
+        mLandControlPanel = findViewById(R.id.land_control_panel);
         if (!MusicUtils.isFragmentRemoved) {
             handleDisplay();
             changeFragment();
@@ -308,12 +738,6 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
                 .replace(R.id.current_queue_view, mFragment, "track_fragment")
                 .commitAllowingStateLoss();
     }
-
-    int mInitialX = -1;
-    int mLastX = -1;
-    int mTextWidth = 0;
-    int mViewWidth = 0;
-    boolean mDraggingLabel = false;
 
     TextView textViewForContainer(View v) {
         View vv = v.findViewById(R.id.artistname);
@@ -401,22 +825,6 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         return false;
     }
 
-    Handler mLabelScroller = new Handler() {
-        @Override
-        public void handleMessage(Message msg) {
-            TextView tv = (TextView) msg.obj;
-            int x = tv.getScrollX();
-            x = x * 3 / 4;
-            tv.scrollTo(x, 0);
-            if (x == 0) {
-                tv.setEllipsize(TruncateAt.END);
-            } else {
-                Message newmsg = obtainMessage(0, tv);
-                mLabelScroller.sendMessageDelayed(newmsg, 15);
-            }
-        }
-    };
-
     public boolean onLongClick(View view) {
 
         CharSequence title = null;
@@ -452,7 +860,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
 
         Cursor c = MusicUtils.query(this, ContentUris.withAppendedId(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, audioid),
-                new String[] { MediaStore.Audio.Media.IS_MUSIC }, null, null,
+                new String[]{MediaStore.Audio.Media.IS_MUSIC}, null, null,
                 null);
         boolean ismusic = true;
         if (c != null) {
@@ -521,44 +929,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         return true;
     }
 
-    private OnSeekBarChangeListener mSeekListener = new OnSeekBarChangeListener() {
-        public void onStartTrackingTouch(SeekBar bar) {
-            mLastSeekEventTime = 0;
-            mFromTouch = true;
-            mCheckIfSeekRequired = false;
-        }
-
-        public void onProgressChanged(SeekBar bar, int progress,
-                boolean fromuser) {
-            if (!fromuser || (mService == null))
-                return;
-            mCheckIfSeekRequired = true;
-            long now = SystemClock.elapsedRealtime();
-            mPosOverride = mDuration * progress / 1000;
-            if ((now - mLastSeekEventTime) > 10) {
-                mLastSeekEventTime = now;
-
-                // trackball event, allow progress updates
-                if (!mFromTouch) {
-                    refreshNow();
-                    mPosOverride = -1;
-                }
-            }
-        }
-
-        public void onStopTrackingTouch(SeekBar bar) {
-            try {
-                if (null != mService && mCheckIfSeekRequired) {
-                    mService.seek(mPosOverride);
-                }
-            } catch (RemoteException ex) {
-            }
-            mPosOverride = -1;
-            mFromTouch = false;
-        }
-    };
-
-    public void closeQueuePanel(){
+    public void closeQueuePanel() {
         mSlidingPanelLayout.mIsQueueEnabled = false;
         mAlbumIcon.setVisibility(View.VISIBLE);
         mLyricIcon.setVisibility(View.VISIBLE);
@@ -579,76 +950,6 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         }
     }
 
-    private View.OnClickListener mQueueListener = new View.OnClickListener() {
-        public void onClick(View v) {
-            MusicBrowserActivity.mIsparentActivityFInishing = true;
-            if (mAlbumIcon.getVisibility() == View.GONE) {
-                mSlidingPanelLayout.mIsQueueEnabled = false;
-                mAlbumIcon.setVisibility(View.VISIBLE);
-                mLyricIcon.setVisibility(View.VISIBLE);
-                mFavoriteIcon.setVisibility(View.VISIBLE);
-                mMenuOverFlow.setOnClickListener(mActiveButtonPopUpMenuListener);
-                mCurrentPlaylist.setImageResource(R.drawable.list);
-                if (mFragment != null) {
-                    MusicUtils.isFragmentRemoved = true;
-                    getFragmentManager().beginTransaction().remove(mFragment)
-                            .commit();
-                }
-                if (mHasLrc && mIsLyricDisplay) {
-                    mLyricPanel.setVisibility(View.VISIBLE);
-                    queueNextRefreshForLyric(REFRESH_MILLIONS);
-                    setLyricIconImage();
-                }
-                if (mLandControlPanel != null) {
-                    mLandControlPanel.setVisibility(View.VISIBLE);
-                }
-            } else {
-                MusicUtils.isFragmentRemoved = false;
-                mSlidingPanelLayout.mIsQueueEnabled = true;
-                mAlbumIcon.setVisibility(View.GONE);
-                mLyricIcon.setVisibility(View.GONE);
-                mFavoriteIcon.setVisibility(View.GONE);
-                mCurrentPlaylist.setImageResource(R.drawable.list_active);
-                mMenuOverFlow.setOnClickListener(mPopUpMenuListener);
-                mFragment = new TrackBrowserFragment();
-                Bundle args = new Bundle();
-                args.putString("playlist", "nowplaying");
-                args.putBoolean("editValue", true);
-                mFragment.setArguments(args);
-                getFragmentManager()
-                        .beginTransaction()
-                        .add(R.id.current_queue_view, mFragment,
-                                "track_fragment").commit();
-                if (mHasLrc) {
-                    mLyricPanel.setVisibility(View.GONE);
-                    stopQueueNextRefreshForLyric();
-                }
-                if (mLandControlPanel != null) {
-                    mLandControlPanel.setVisibility(View.GONE);
-                }
-            }
-        }
-    };
-
-    private View.OnClickListener mFavoriteListener = new View.OnClickListener() {
-        public void onClick(View v) {
-            long audioid;
-            try {
-                audioid = mService.getAudioId();
-            } catch (Exception ex) {
-                return;
-            }
-
-            int playlistId = MusicUtils.idForplaylist(MediaPlaybackActivity.this, "My Favorite");
-            int memberId = getMemberId(playlistId, audioid);
-            if (memberId == -1) {
-                addToFavoritePlaylist(playlistId, audioid);
-            } else {
-                removeFromPlaylist(playlistId, memberId);
-            }
-        }
-    };
-
     private int getMemberId(int playlistId, long id) {
         Uri uri = MediaStore.Audio.Playlists.Members.getContentUri(
                 "external", Long.valueOf(playlistId));
@@ -657,7 +958,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         where.append(MediaStore.Audio.Playlists.Members.AUDIO_ID + " = ");
         where.append(id);
 
-        String[] mCursorCols = new String[] {
+        String[] mCursorCols = new String[]{
                 MediaStore.Audio.Playlists.Members._ID
         };
         Cursor cursor = null;
@@ -694,7 +995,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
 
     private void addToFavoritePlaylist(int playlistId, long audioId) {
 
-        long[] list = new long[] {
+        long[] list = new long[]{
                 audioId
         };
 
@@ -716,7 +1017,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
             }
         }
 
-        MusicUtils.addToPlaylist(this, list,playlistId);
+        MusicUtils.addToPlaylist(this, list, playlistId);
 
     }
 
@@ -732,126 +1033,15 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
             return false;
         }
         int memberId = getMemberId(playlistId, audioid);
-        if (memberId == -1) {
-            return false;
-        } else {
-            return true;
-        }
+        return memberId != -1;
 
     }
-
-    private View.OnClickListener mShuffleListener = new View.OnClickListener() {
-        public void onClick(View v) {
-            toggleShuffle();
-        }
-    };
-
-    private View.OnClickListener mRepeatListener = new View.OnClickListener() {
-        public void onClick(View v) {
-            cycleRepeat();
-        }
-    };
-
-    private View.OnClickListener mSoundEffectListener = new View.OnClickListener() {
-        public void onClick(View v) {
-            MusicUtils.startSoundEffectActivity(MediaPlaybackActivity.this);
-        }
-    };
-
-    public View.OnClickListener mPauseListener = new View.OnClickListener() {
-        public void onClick(View v) {
-            doPauseResume();
-        }
-    };
-
-    private View.OnClickListener mPrevListener = new View.OnClickListener() {
-        public void onClick(View v) {
-            if (mService == null)
-                return;
-            sendIsRespondMessage(GO_PRE);
-        }
-    };
-
-    private View.OnClickListener mNextListener = new View.OnClickListener() {
-        public void onClick(View v) {
-            if (mService == null)
-                return;
-            sendIsRespondMessage(GO_NEXT);
-        }
-    };
 
     private void sendIsRespondMessage(int msgId) {
         if (!mHandler.hasMessages(msgId)) {
             mHandler.sendEmptyMessage(msgId);
         }
     }
-
-    private View.OnClickListener mPopUpMenuListener = new View.OnClickListener() {
-        public void onClick(View v) {
-            if (mPopupMenu != null) {
-                mPopupMenu.dismiss();
-            }
-            PopupMenu popup = new PopupMenu(mActivity, mMenuOverFlow);
-            // icon will be set in onPrepareOptionsMenu()
-            popup.getMenu()
-                    .add(0, SAVE_AS_PLAYLIST, 0, R.string.save_as_playlist)
-                    .setIcon(android.R.drawable.ic_menu_save);
-            popup.getMenu().add(0, CLEAR_PLAYLIST, 0, R.string.clear_playlist)
-                    .setIcon(R.drawable.ic_menu_clear_playlist);
-            popup.show();
-            popup.setOnMenuItemClickListener(new OnMenuItemClickListener() {
-
-                @Override
-                public boolean onMenuItemClick(MenuItem item) {
-                    onOptionsItemSelected(item);
-                    return true;
-                }
-            });
-            mPopupMenu = popup;
-        }
-    };
-
-    private View.OnClickListener mActiveButtonPopUpMenuListener = new View.OnClickListener() {
-        public void onClick(View v) {
-            if (mPopupMenu != null) {
-                mPopupMenu.dismiss();
-            }
-            PopupMenu popup = new PopupMenu(mActivity, mMenuOverFlow);
-            // icon will be set in onPrepareOptionsMenu()
-            SubMenu sub = popup.getMenu().addSubMenu(0,
-                    ADD_TO_PLAYLIST, 0, R.string.add_to_playlist);
-            MusicUtils.makePlaylistMenu(MediaPlaybackActivity.this, sub);
-            MusicUtils.addSetRingtonMenu(popup.getMenu());
-            Intent i = new Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL);
-            if (getPackageManager().resolveActivity(i, 0) != null) {
-                popup.getMenu().add(0, EFFECTS_PANEL, 0, R.string.effectspanel);
-            }
-            popup.getMenu()
-            .add(0, DELETE_ITEM, 0, R.string.delete_item);
-            popup.show();
-            popup.setOnMenuItemClickListener(new OnMenuItemClickListener() {
-
-                @Override
-                public boolean onMenuItemClick(MenuItem item) {
-                    onOptionsItemSelected(item);
-                    return true;
-                }
-            });
-            mPopupMenu = popup;
-        }
-    };
-
-    private RepeatingImageButton.RepeatListener mRewListener = new RepeatingImageButton.RepeatListener() {
-        public void onRepeat(View v, long howlong, int repcnt) {
-            scanBackward(repcnt, howlong);
-        }
-    };
-
-    private RepeatingImageButton.RepeatListener mFfwdListener = new RepeatingImageButton.RepeatListener() {
-        public void onRepeat(View v, long howlong, int repcnt) {
-            scanForward(repcnt, howlong);
-        }
-    };
 
     public void setTouchDelegate(final View v) {
         final View parent = (View) v.getParent();
@@ -947,111 +1137,111 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         Intent intent;
         try {
             switch (item.getItemId()) {
-            case GOTO_START:
-                intent = new Intent();
-                intent.setClass(this, MusicBrowserActivity.class);
-                intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        | Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-                finish();
-                break;
-            case USE_AS_RINGTONE: {
-                // Set the system setting to make this the current ringtone
-                if (mService != null) {
-                    MusicUtils.setRingtone(this, mService.getAudioId());
+                case GOTO_START:
+                    intent = new Intent();
+                    intent.setClass(this, MusicBrowserActivity.class);
+                    intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                    finish();
+                    break;
+                case USE_AS_RINGTONE: {
+                    // Set the system setting to make this the current ringtone
+                    if (mService != null) {
+                        MusicUtils.setRingtone(this, mService.getAudioId());
+                    }
+                    return true;
                 }
-                return true;
-            }
-            case USE_AS_RINGTONE_2: {
-                // Set the system setting to make this the current ringtone for
-                // SUB_1
-                if (mService != null) {
-                    MusicUtils.setRingtone(this, mService.getAudioId(),
-                            MusicUtils.RINGTONE_SUB_1);
+                case USE_AS_RINGTONE_2: {
+                    // Set the system setting to make this the current ringtone for
+                    // SUB_1
+                    if (mService != null) {
+                        MusicUtils.setRingtone(this, mService.getAudioId(),
+                                MusicUtils.RINGTONE_SUB_1);
+                    }
+                    return true;
                 }
-                return true;
-            }
 
-            case SHUFFLE_ALL:
-                Cursor cursor = MusicUtils.query(this,
-                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                        new String[] { MediaStore.Audio.Media._ID },
-                        MediaStore.Audio.Media.IS_MUSIC + "=1", null,
-                        MediaStore.Audio.Media.DEFAULT_SORT_ORDER);
-                if (cursor != null) {
-                    MusicUtils.shuffleAll(this, cursor);
-                    cursor.close();
+                case SHUFFLE_ALL:
+                    Cursor cursor = MusicUtils.query(this,
+                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                            new String[]{MediaStore.Audio.Media._ID},
+                            MediaStore.Audio.Media.IS_MUSIC + "=1", null,
+                            MediaStore.Audio.Media.DEFAULT_SORT_ORDER);
+                    if (cursor != null) {
+                        MusicUtils.shuffleAll(this, cursor);
+                        cursor.close();
+                    }
+                    return true;
+
+                case PARTY_SHUFFLE:
+                    MusicUtils.togglePartyShuffle();
+                    setShuffleButtonImage();
+                    setRepeatButtonImage();
+                    break;
+
+                case NEW_PLAYLIST: {
+                    intent = new Intent();
+                    intent.setClass(this, CreatePlaylist.class);
+                    startActivityForResult(intent, NEW_PLAYLIST);
+                    return true;
                 }
-                return true;
 
-            case PARTY_SHUFFLE:
-                MusicUtils.togglePartyShuffle();
-                setShuffleButtonImage();
-                setRepeatButtonImage();
-                break;
+                case SAVE_AS_PLAYLIST:
+                    intent = new Intent();
+                    intent.setClass(this, CreatePlaylist.class);
+                    startActivityForResult(intent, SAVE_AS_PLAYLIST);
+                    return true;
 
-            case NEW_PLAYLIST: {
-                intent = new Intent();
-                intent.setClass(this, CreatePlaylist.class);
-                startActivityForResult(intent, NEW_PLAYLIST);
-                return true;
-            }
+                case CLEAR_PLAYLIST:
+                    // We only clear the current playlist
+                    MusicUtils.clearQueue();
+                    if (mIsPanelExpanded) {
+                        mSlidingPanelLayout.setHookState(BoardState.HIDDEN);
+                        mIsPanelExpanded = false;
+                        mNowPlayingView.setVisibility(View.GONE);
+                    }
+                    return true;
 
-            case SAVE_AS_PLAYLIST:
-                intent = new Intent();
-                intent.setClass(this, CreatePlaylist.class);
-                startActivityForResult(intent, SAVE_AS_PLAYLIST);
-                return true;
-
-            case CLEAR_PLAYLIST:
-                // We only clear the current playlist
-                MusicUtils.clearQueue();
-                if (mIsPanelExpanded) {
-                    mSlidingPanelLayout.setHookState(BoardState.HIDDEN);
-                    mIsPanelExpanded = false;
-                    mNowPlayingView.setVisibility(View.GONE);
-                }
-                return true;
-
-            case PLAYLIST_SELECTED: {
-                long[] list = new long[1];
-                list[0] = MusicUtils.getCurrentAudioId();
-                long playlist = item.getIntent().getLongExtra("playlist", 0);
-                MusicUtils.addToPlaylist(this, list, playlist);
-                return true;
-            }
-
-            case DELETE_ITEM: {
-                if (mService != null) {
+                case PLAYLIST_SELECTED: {
                     long[] list = new long[1];
                     list[0] = MusicUtils.getCurrentAudioId();
-                    Bundle bundle = new Bundle();
-                    String filter = getString(R.string.delete_song_desc,
-                            mService.getTrackName());
-                    bundle.putString("description", filter);
-                    bundle.putLongArray("items", list);
-                    intent = new Intent();
-                    intent.setClass(this, DeleteItems.class);
-                    intent.putExtras(bundle);
-                    startActivityForResult(intent, -1);
+                    long playlist = item.getIntent().getLongExtra("playlist", 0);
+                    MusicUtils.addToPlaylist(this, list, playlist);
+                    return true;
                 }
-                return true;
-            }
 
-            case EFFECTS_PANEL:
-                MusicUtils.startSoundEffectActivity(MediaPlaybackActivity.this);
-                return true;
-
-            case CLOSE: {
-                try {
-                    if (MusicUtils.sService != null) {
-                        MusicUtils.sService.stop();
+                case DELETE_ITEM: {
+                    if (mService != null) {
+                        long[] list = new long[1];
+                        list[0] = MusicUtils.getCurrentAudioId();
+                        Bundle bundle = new Bundle();
+                        String filter = getString(R.string.delete_song_desc,
+                                mService.getTrackName());
+                        bundle.putString("description", filter);
+                        bundle.putLongArray("items", list);
+                        intent = new Intent();
+                        intent.setClass(this, DeleteItems.class);
+                        intent.putExtras(bundle);
+                        startActivityForResult(intent, -1);
                     }
-                } catch (RemoteException ex) {
+                    return true;
                 }
-                SysApplication.getInstance().exit();
-                return true;
-            }
+
+                case EFFECTS_PANEL:
+                    MusicUtils.startSoundEffectActivity(MediaPlaybackActivity.this);
+                    return true;
+
+                case CLOSE: {
+                    try {
+                        if (MusicUtils.sService != null) {
+                            MusicUtils.sService.stop();
+                        }
+                    } catch (RemoteException ex) {
+                    }
+                    SysApplication.getInstance().exit();
+                    return true;
+                }
             }
         } catch (RemoteException ex) {
         }
@@ -1060,65 +1250,65 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode,
-            Intent intent) {
+                                    Intent intent) {
         if (resultCode != RESULT_OK) {
             return;
         }
         switch (requestCode) {
-        case NEW_PLAYLIST:
-            if (resultCode == RESULT_OK) {
-                long songID = -1;
-                Uri uri = intent.getData();
-                try {
-                    if (mService != null) {
-                        songID = mService.getAudioId();
-                        if (songID != -1) {
-                            if (uri != null) {
-                                long[] list = new long[] { songID };
-                                int playlist = Integer.parseInt(uri
-                                        .getLastPathSegment());
-                                MusicUtils.addToPlaylist(this, list, playlist);
-                            }
-                        } else {
-                            Log.e(TAG,"Audio ID is -1");
-                        }
-                    }
-                } catch (RemoteException e) {
-                    Log.e(TAG,"Remote Exception is caught");
-                }
-            }
-            break;
-        case SAVE_AS_PLAYLIST:
-            if (resultCode == RESULT_OK) {
-                Uri uri = intent.getData();
-                if (uri != null) {
-                    Cursor c = null;
+            case NEW_PLAYLIST:
+                if (resultCode == RESULT_OK) {
+                    long songID = -1;
+                    Uri uri = intent.getData();
                     try {
-                        c = updateTrackCursor();
-                        if (c != null) {
-                            long[] list = MusicUtils
-                                    .getSongListForCursor(c);
-                            int plid = Integer.parseInt(uri.getLastPathSegment());
-                            MusicUtils.addToPlaylist(this, list, plid);
+                        if (mService != null) {
+                            songID = mService.getAudioId();
+                            if (songID != -1) {
+                                if (uri != null) {
+                                    long[] list = new long[]{songID};
+                                    int playlist = Integer.parseInt(uri
+                                            .getLastPathSegment());
+                                    MusicUtils.addToPlaylist(this, list, playlist);
+                                }
+                            } else {
+                                Log.e(TAG, "Audio ID is -1");
+                            }
                         }
-                    } catch (Exception e) {
-                    } finally {
-                        if (c != null) {
-                            c.close();
+                    } catch (RemoteException e) {
+                        Log.e(TAG, "Remote Exception is caught");
+                    }
+                }
+                break;
+            case SAVE_AS_PLAYLIST:
+                if (resultCode == RESULT_OK) {
+                    Uri uri = intent.getData();
+                    if (uri != null) {
+                        Cursor c = null;
+                        try {
+                            c = updateTrackCursor();
+                            if (c != null) {
+                                long[] list = MusicUtils
+                                        .getSongListForCursor(c);
+                                int plid = Integer.parseInt(uri.getLastPathSegment());
+                                MusicUtils.addToPlaylist(this, list, plid);
+                            }
+                        } catch (Exception e) {
+                        } finally {
+                            if (c != null) {
+                                c.close();
+                            }
                         }
                     }
                 }
-            }
-            break;
+                break;
         }
     }
 
     public Cursor updateTrackCursor() {
-        String[] cols = new String[] { MediaStore.Audio.Media._ID,
+        String[] cols = new String[]{MediaStore.Audio.Media._ID,
                 MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.DATA,
                 MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.ARTIST,
                 MediaStore.Audio.Media.ARTIST_ID,
-                MediaStore.Audio.Media.DURATION };
+                MediaStore.Audio.Media.DURATION};
         Cursor currentPlaylistCursor;
         long[] nowPlaying;
         int size;
@@ -1151,16 +1341,9 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         setFavoriteIconImage(getFavoriteStatus());
     }
 
-    public static int getStatusBarHeight() {
-        Rect rectangle = new Rect();
-        Window window = MediaPlaybackActivity.getInstance().getWindow();
-        window.getDecorView().getWindowVisibleDisplayFrame(rectangle);
-        return rectangle.top;
-    }
-
     public void loadPreviousFragment() {
         Fragment fragment = FragmentsFactory
-                .loadFragment((int) MusicUtils.navigatingTabPosition);
+                .loadFragment(MusicUtils.navigatingTabPosition);
         if (!fragment.isAdded()) {
             getFragmentManager().beginTransaction()
                     .replace(R.id.fragment_page, fragment).commit();
@@ -1211,25 +1394,6 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         return super.dispatchKeyEvent(event);
     }
 
-    private final int keyboard[][] = {
-            { KeyEvent.KEYCODE_Q, KeyEvent.KEYCODE_W, KeyEvent.KEYCODE_E,
-                    KeyEvent.KEYCODE_R, KeyEvent.KEYCODE_T, KeyEvent.KEYCODE_Y,
-                    KeyEvent.KEYCODE_U, KeyEvent.KEYCODE_I, KeyEvent.KEYCODE_O,
-                    KeyEvent.KEYCODE_P, },
-            { KeyEvent.KEYCODE_A, KeyEvent.KEYCODE_S, KeyEvent.KEYCODE_D,
-                    KeyEvent.KEYCODE_F, KeyEvent.KEYCODE_G, KeyEvent.KEYCODE_H,
-                    KeyEvent.KEYCODE_J, KeyEvent.KEYCODE_K, KeyEvent.KEYCODE_L,
-                    KeyEvent.KEYCODE_DEL, },
-            { KeyEvent.KEYCODE_Z, KeyEvent.KEYCODE_X, KeyEvent.KEYCODE_C,
-                    KeyEvent.KEYCODE_V, KeyEvent.KEYCODE_B, KeyEvent.KEYCODE_N,
-                    KeyEvent.KEYCODE_M, KeyEvent.KEYCODE_COMMA,
-                    KeyEvent.KEYCODE_PERIOD, KeyEvent.KEYCODE_ENTER }
-
-    };
-
-    private int lastX;
-    private int lastY;
-
     private boolean seekMethod1(int keyCode) {
         if (mService == null)
             return false;
@@ -1244,17 +1408,17 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
                         dir = 1;
                     else if (y == 0 && lastY == 0 && x < lastX)
                         dir = -1;
-                    // bottom row
+                        // bottom row
                     else if (y == 2 && lastY == 2 && x > lastX)
                         dir = -1;
                     else if (y == 2 && lastY == 2 && x < lastX)
                         dir = 1;
-                    // moving up
+                        // moving up
                     else if (y < lastY && x <= 4)
                         dir = 1;
                     else if (y < lastY && x >= 5)
                         dir = -1;
-                    // moving down
+                        // moving down
                     else if (y > lastY && x <= 4)
                         dir = -1;
                     else if (y > lastY && x >= 5)
@@ -1296,46 +1460,46 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         try {
             switch (keyCode) {
-            case KeyEvent.KEYCODE_DPAD_LEFT:
-                if (!useDpadMusicControl()) {
-                    break;
-                }
-                if (mService != null) {
-                    if (!mSeeking && mStartSeekPos >= 0) {
-                        mPauseButton.requestFocus();
-                        if (mStartSeekPos < 1000) {
-                            mService.prev();
+                case KeyEvent.KEYCODE_DPAD_LEFT:
+                    if (!useDpadMusicControl()) {
+                        break;
+                    }
+                    if (mService != null) {
+                        if (!mSeeking && mStartSeekPos >= 0) {
+                            mPauseButton.requestFocus();
+                            if (mStartSeekPos < 1000) {
+                                mService.prev();
+                            } else {
+                                mService.seek(0);
+                            }
                         } else {
-                            mService.seek(0);
+                            scanBackward(-1,
+                                    event.getEventTime() - event.getDownTime());
+                            mPauseButton.requestFocus();
+                            mStartSeekPos = -1;
                         }
-                    } else {
-                        scanBackward(-1,
-                                event.getEventTime() - event.getDownTime());
-                        mPauseButton.requestFocus();
-                        mStartSeekPos = -1;
                     }
-                }
-                mSeeking = false;
-                mPosOverride = -1;
-                return true;
-            case KeyEvent.KEYCODE_DPAD_RIGHT:
-                if (!useDpadMusicControl()) {
-                    break;
-                }
-                if (mService != null) {
-                    if (!mSeeking && mStartSeekPos >= 0) {
-                        mPauseButton.requestFocus();
-                        mService.next();
-                    } else {
-                        scanForward(-1,
-                                event.getEventTime() - event.getDownTime());
-                        mPauseButton.requestFocus();
-                        mStartSeekPos = -1;
+                    mSeeking = false;
+                    mPosOverride = -1;
+                    return true;
+                case KeyEvent.KEYCODE_DPAD_RIGHT:
+                    if (!useDpadMusicControl()) {
+                        break;
                     }
-                }
-                mSeeking = false;
-                mPosOverride = -1;
-                return true;
+                    if (mService != null) {
+                        if (!mSeeking && mStartSeekPos >= 0) {
+                            mPauseButton.requestFocus();
+                            mService.next();
+                        } else {
+                            scanForward(-1,
+                                    event.getEventTime() - event.getDownTime());
+                            mPauseButton.requestFocus();
+                            mStartSeekPos = -1;
+                        }
+                    }
+                    mSeeking = false;
+                    mPosOverride = -1;
+                    return true;
             }
         } catch (RemoteException ex) {
         }
@@ -1344,13 +1508,10 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
 
     private boolean useDpadMusicControl() {
 
-        if (mDeviceHasDpad && (mPrevButton.isFocused() ||
+        return mDeviceHasDpad && (mPrevButton.isFocused() ||
                 mNextButton.isFocused() ||
-                mPauseButton.isFocused())) {
-            return true;
-        }
+                mPauseButton.isFocused());
 
-        return false;
     }
 
     @Override
@@ -1366,56 +1527,56 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
             return true;
 
         switch (keyCode) {
-        /*
-         * // image scale case KeyEvent.KEYCODE_Q: av.adjustParams(-0.05, 0.0,
-         * 0.0, 0.0, 0.0,-1.0); break; case KeyEvent.KEYCODE_E: av.adjustParams(
-         * 0.05, 0.0, 0.0, 0.0, 0.0, 1.0); break; // image translate case
-         * KeyEvent.KEYCODE_W: av.adjustParams( 0.0, 0.0,-1.0, 0.0, 0.0, 0.0);
-         * break; case KeyEvent.KEYCODE_X: av.adjustParams( 0.0, 0.0, 1.0, 0.0,
-         * 0.0, 0.0); break; case KeyEvent.KEYCODE_A: av.adjustParams( 0.0,-1.0,
-         * 0.0, 0.0, 0.0, 0.0); break; case KeyEvent.KEYCODE_D: av.adjustParams(
-         * 0.0, 1.0, 0.0, 0.0, 0.0, 0.0); break; // camera rotation case
-         * KeyEvent.KEYCODE_R: av.adjustParams( 0.0, 0.0, 0.0, 0.0, 0.0,-1.0);
-         * break; case KeyEvent.KEYCODE_U: av.adjustParams( 0.0, 0.0, 0.0, 0.0,
-         * 0.0, 1.0); break; // camera translate case KeyEvent.KEYCODE_Y:
-         * av.adjustParams( 0.0, 0.0, 0.0, 0.0,-1.0, 0.0); break; case
-         * KeyEvent.KEYCODE_N: av.adjustParams( 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
-         * break; case KeyEvent.KEYCODE_G: av.adjustParams( 0.0, 0.0, 0.0,-1.0,
-         * 0.0, 0.0); break; case KeyEvent.KEYCODE_J: av.adjustParams( 0.0, 0.0,
-         * 0.0, 1.0, 0.0, 0.0); break;
-         */
+            /*
+             * // image scale case KeyEvent.KEYCODE_Q: av.adjustParams(-0.05, 0.0,
+             * 0.0, 0.0, 0.0,-1.0); break; case KeyEvent.KEYCODE_E: av.adjustParams(
+             * 0.05, 0.0, 0.0, 0.0, 0.0, 1.0); break; // image translate case
+             * KeyEvent.KEYCODE_W: av.adjustParams( 0.0, 0.0,-1.0, 0.0, 0.0, 0.0);
+             * break; case KeyEvent.KEYCODE_X: av.adjustParams( 0.0, 0.0, 1.0, 0.0,
+             * 0.0, 0.0); break; case KeyEvent.KEYCODE_A: av.adjustParams( 0.0,-1.0,
+             * 0.0, 0.0, 0.0, 0.0); break; case KeyEvent.KEYCODE_D: av.adjustParams(
+             * 0.0, 1.0, 0.0, 0.0, 0.0, 0.0); break; // camera rotation case
+             * KeyEvent.KEYCODE_R: av.adjustParams( 0.0, 0.0, 0.0, 0.0, 0.0,-1.0);
+             * break; case KeyEvent.KEYCODE_U: av.adjustParams( 0.0, 0.0, 0.0, 0.0,
+             * 0.0, 1.0); break; // camera translate case KeyEvent.KEYCODE_Y:
+             * av.adjustParams( 0.0, 0.0, 0.0, 0.0,-1.0, 0.0); break; case
+             * KeyEvent.KEYCODE_N: av.adjustParams( 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+             * break; case KeyEvent.KEYCODE_G: av.adjustParams( 0.0, 0.0, 0.0,-1.0,
+             * 0.0, 0.0); break; case KeyEvent.KEYCODE_J: av.adjustParams( 0.0, 0.0,
+             * 0.0, 1.0, 0.0, 0.0); break;
+             */
 
-        case KeyEvent.KEYCODE_SLASH:
-            seekmethod = 1 - seekmethod;
-            return true;
+            case KeyEvent.KEYCODE_SLASH:
+                seekmethod = 1 - seekmethod;
+                return true;
 
-        case KeyEvent.KEYCODE_DPAD_LEFT:
-            if (!useDpadMusicControl()) {
-                break;
-            }
-            if (!mPrevButton.hasFocus()) {
-                mPrevButton.requestFocus();
-            }
-            scanBackward(repcnt, event.getEventTime() - event.getDownTime());
-            return true;
-        case KeyEvent.KEYCODE_DPAD_RIGHT:
-            if (!useDpadMusicControl()) {
-                break;
-            }
-            if (!mNextButton.hasFocus()) {
-                mNextButton.requestFocus();
-            }
-            scanForward(repcnt, event.getEventTime() - event.getDownTime());
-            return true;
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                if (!useDpadMusicControl()) {
+                    break;
+                }
+                if (!mPrevButton.hasFocus()) {
+                    mPrevButton.requestFocus();
+                }
+                scanBackward(repcnt, event.getEventTime() - event.getDownTime());
+                return true;
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                if (!useDpadMusicControl()) {
+                    break;
+                }
+                if (!mNextButton.hasFocus()) {
+                    mNextButton.requestFocus();
+                }
+                scanForward(repcnt, event.getEventTime() - event.getDownTime());
+                return true;
 
-        case KeyEvent.KEYCODE_S:
-            toggleShuffle();
-            return true;
+            case KeyEvent.KEYCODE_S:
+                toggleShuffle();
+                return true;
 
-        case KeyEvent.KEYCODE_DPAD_CENTER:
-        case KeyEvent.KEYCODE_SPACE:
-            doPauseResume();
-            return true;
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_SPACE:
+                doPauseResume();
+                return true;
         }
         return super.onKeyDown(keyCode, event);
     }
@@ -1589,13 +1750,6 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         mToast.show();
     }
 
-    private Handler mToastHandler = new Handler();
-    private Runnable mRun = new Runnable() {
-        public void run() {
-            mToast.cancel();
-        }
-    };
-
     private void startPlayback() {
 
         if (mService == null)
@@ -1626,28 +1780,6 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         long next = refreshNow();
         queueNextRefresh(next);
     }
-
-    private BroadcastReceiver mTrackListListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            try {
-                if (mService != null) {
-                    if (mService.getAudioId() >= 0 || mService.isPlaying()
-                            || mService.getPath() != null) {
-                        mNowPlayingView.setVisibility(View.VISIBLE);
-                        if (mSlidingPanelLayout.getHookState() != BoardState.EXPANDED
-                                      && (mSlidingPanelLayout.getHookState() != BoardState.COLLAPSED)) {
-                           mSlidingPanelLayout
-                                    .setHookState(BoardState.COLLAPSED);
-                        }
-                    }
-                }
-            } catch (RemoteException e) {
-                Log.e(TAG, "Error caught");
-            }
-            updateNowPlaying(MediaPlaybackActivity.this);
-        }
-    };
 
     @Override
     public void onServiceConnected(ComponentName classname, IBinder obj) {
@@ -1685,16 +1817,16 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
             return;
         try {
             switch (mService.getRepeatMode()) {
-            case MediaPlaybackService.REPEAT_ALL:
-                mRepeatButton.setImageResource(R.drawable.loopall);
-                break;
-            case MediaPlaybackService.REPEAT_CURRENT:
-                mRepeatButton
-                        .setImageResource(R.drawable.loopone);
-                break;
-            default:
-                mRepeatButton.setImageResource(R.drawable.normal);
-                break;
+                case MediaPlaybackService.REPEAT_ALL:
+                    mRepeatButton.setImageResource(R.drawable.loopall);
+                    break;
+                case MediaPlaybackService.REPEAT_CURRENT:
+                    mRepeatButton
+                            .setImageResource(R.drawable.loopone);
+                    break;
+                default:
+                    mRepeatButton.setImageResource(R.drawable.normal);
+                    break;
             }
         } catch (RemoteException ex) {
         }
@@ -1705,15 +1837,15 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
             return;
         try {
             switch (mService.getShuffleMode()) {
-            case MediaPlaybackService.SHUFFLE_NONE:
-                mShuffleButton.setImageResource(R.drawable.random);
-                break;
-            case MediaPlaybackService.SHUFFLE_AUTO:
-                mShuffleButton.setImageResource(R.drawable.random_active);
-                break;
-            default:
-                mShuffleButton.setImageResource(R.drawable.random_active);
-                break;
+                case MediaPlaybackService.SHUFFLE_NONE:
+                    mShuffleButton.setImageResource(R.drawable.random);
+                    break;
+                case MediaPlaybackService.SHUFFLE_AUTO:
+                    mShuffleButton.setImageResource(R.drawable.random_active);
+                    break;
+                default:
+                    mShuffleButton.setImageResource(R.drawable.random_active);
+                    break;
             }
         } catch (RemoteException ex) {
         }
@@ -1761,27 +1893,6 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         } catch (RemoteException ex) {
         }
     }
-
-    private ImageView mAlbum;
-    private ImageView mAlbumIcon;
-    private TextView mCurrentTime;
-    private TextView mTotalTime;
-    private TextView mArtistName;
-    private TextView mTrackName;
-    private ProgressBar mProgress;
-    private long mPosOverride = -1;
-    private boolean mFromTouch = false;
-    private long mDuration;
-    private int seekmethod;
-    private boolean paused;
-
-    private static final int REFRESH = 1;
-    private static final int QUIT = 2;
-    private static final int GET_ALBUM_ART = 3;
-    private static final int ALBUM_ART_DECODED = 4;
-    private static final int GO_PRE = 5;
-    private static final int GO_NEXT = 6;
-    private static final int REFRESH_LYRIC = 1;
 
     private void queueNextRefresh(long delay) {
         if (!paused) {
@@ -1843,148 +1954,16 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         return 500;
     }
 
-    private final Handler mHandler = new Handler() {
-        @Override
-        public void handleMessage(Message msg) {
-            switch (msg.what) {
-            case ALBUM_ART_DECODED:
-                if (msg.obj != null && msg.obj instanceof Bitmap) {
-                    mAlbum.setImageBitmap((Bitmap) msg.obj);
-                    mAlbum.getDrawable().setDither(true);
-                    mAlbumIcon.setImageBitmap((Bitmap) msg.obj);
-                    mAlbumIcon.getDrawable().setDither(true);
-                } else {
-                    mAlbum.setImageResource(R.drawable.album_cover_background);
-                    mAlbum.getDrawable().setDither(true);
-                    mAlbumIcon.setImageResource(R.drawable.album_cover_background);
-                    mAlbumIcon.getDrawable().setDither(true);
-                }
-                break;
-
-            case REFRESH:
-                long next = refreshNow();
-                queueNextRefresh(next);
-                break;
-
-            case QUIT:
-                // This can be moved back to onCreate once the bug that prevents
-                // Dialogs from being started from onCreate/onResume is fixed.
-                new AlertDialog.Builder(MediaPlaybackActivity.this)
-                        .setTitle(R.string.service_start_error_title)
-                        .setMessage(R.string.service_start_error_msg)
-                        .setPositiveButton(R.string.service_start_error_button,
-                                new DialogInterface.OnClickListener() {
-                                    public void onClick(DialogInterface dialog,
-                                            int whichButton) {
-                                        finish();
-                                    }
-                                }).setCancelable(false).show();
-                break;
-            case GO_PRE:
-                try {
-                    int shuffle = mService.getShuffleMode();
-                    int histSize = mService.getHistSize();
-                    if (isGoStart(shuffle, histSize)) {
-                        mService.seek(0);
-                        mService.play();
-                    } else {
-                        mService.prev();
-                    }
-                } catch (RemoteException ex) {
-                    ex.printStackTrace();
-                }
-                break;
-            case GO_NEXT:
-                try {
-                    mService.next();
-                } catch (RemoteException ex) {
-                    ex.printStackTrace();
-                }
-                break;
-
-            default:
-                break;
-            }
-        }
-    };
-
     private boolean isGoStart(int shuffle, int histSize) {
         try {
-            Boolean isOverTime = mService.position() < SWITCH_MUSIC_MAX_TIME ? true : false;
-            Boolean isShuffleMode = shuffle == MediaPlaybackService.SHUFFLE_NORMAL ? true : false;
-            Boolean isHistLess = histSize == 0 || histSize == 1 ? true : false;
-            if ((isOverTime && isShuffleMode && isHistLess) || !isOverTime) {
-                return true;
-            } else {
-                return false;
-            }
+            Boolean isOverTime = mService.position() < SWITCH_MUSIC_MAX_TIME;
+            Boolean isShuffleMode = shuffle == MediaPlaybackService.SHUFFLE_NORMAL;
+            Boolean isHistLess = histSize == 0 || histSize == 1;
+            return !isOverTime || (isShuffleMode && isHistLess);
         } catch (RemoteException e) {
             e.printStackTrace();
         }
         return false;
-    }
-
-    private BroadcastReceiver mStatusListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (action.equals(MediaPlaybackService.META_CHANGED)) {
-                mMetaChanged = true;
-                // redraw the artist/title info and
-                // set new max for progress bar
-                updateTrackInfo();
-                setPauseButtonImage();
-            } else if (action.equals(MediaPlaybackService.PLAYSTATE_CHANGED)) {
-                setPauseButtonImage();
-            } else if (action.equals(MediaPlaybackService.SHUFFLE_CHANGED)) {
-                setShuffleButtonImage();
-            } else if (action.equals(MediaPlaybackService.REPEAT_CHANGED)) {
-                setRepeatButtonImage();
-            }
-        }
-    };
-
-    private BroadcastReceiver mScreenTimeoutListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (Intent.ACTION_SCREEN_ON.equals(intent.getAction())) {
-                if (mReceiverUnregistered) {
-                    IntentFilter f = new IntentFilter();
-                    f.addAction(MediaPlaybackService.PLAYSTATE_CHANGED);
-                    f.addAction(MediaPlaybackService.META_CHANGED);
-                    f.addAction(MediaPlaybackService.SHUFFLE_CHANGED);
-                    f.addAction(MediaPlaybackService.REPEAT_CHANGED);
-                    registerReceiver(mStatusListener, f);
-                    mReceiverUnregistered = false;
-                }
-                paused = false;
-
-                if (mPosOverride > 0) {
-                    mPosOverride = -1;
-                }
-                updateTrackInfo();
-                long next = refreshNow();
-                queueNextRefresh(next);
-            } else if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
-                paused = false;
-
-                if (!mReceiverUnregistered) {
-                    mHandler.removeMessages(REFRESH);
-                    unregisterReceiver(mStatusListener);
-                    mReceiverUnregistered = true;
-                }
-            }
-        }
-    };
-
-    private static class AlbumSongIdWrapper {
-        public long albumid;
-        public long songid;
-
-        AlbumSongIdWrapper(long aid, long sid) {
-            albumid = aid;
-            songid = sid;
-        }
     }
 
     private void updateTrackInfo() {
@@ -2036,7 +2015,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
             // fetch clip duration from media database if available
             Cursor cursor = MusicUtils.query(this,
                     ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, songid),
-                    new String [] { MediaStore.Audio.Media.DURATION }, null, null, null);
+                    new String[]{MediaStore.Audio.Media.DURATION}, null, null, null);
             if (cursor != null && cursor.moveToFirst()) {
                 mDuration = cursor.getInt(0);
                 // if duration in media database is not valid,
@@ -2065,95 +2044,14 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         }
     }
 
-    public class AlbumArtHandler extends Handler {
-        private long mAlbumId = -1;
-
-        public AlbumArtHandler(Looper looper) {
-            super(looper);
-        }
-
-        @Override
-        public void handleMessage(Message msg) {
-            long albumid = ((AlbumSongIdWrapper) msg.obj).albumid;
-            long songid = ((AlbumSongIdWrapper) msg.obj).songid;
-            if (msg.what == GET_ALBUM_ART
-                    && (mAlbumId != albumid || albumid < 0 || mOrientationChanged)) {
-                mOrientationChanged = false;
-                // while decoding the new image, show the default album art
-                Message numsg = mHandler.obtainMessage(ALBUM_ART_DECODED,
-                        MusicUtils.getDefaultArtwork(MediaPlaybackActivity.this));
-                mHandler.removeMessages(ALBUM_ART_DECODED);
-                mHandler.sendMessageDelayed(numsg, 600);
-                // Don't allow default artwork here, because we want to fall back to
-                // song-specific album art if we can't find anything for the album.
-                Bitmap bm = MusicUtils.getArtwork(MediaPlaybackActivity.this,
-                        songid, albumid, false);
-                if (bm == null) {
-                    bm = MusicUtils.getArtwork(MediaPlaybackActivity.this,
-                            songid, -1);
-                    albumid = -1;
-                }
-                if (bm != null) {
-                    numsg = mHandler.obtainMessage(ALBUM_ART_DECODED, bm);
-                    mHandler.removeMessages(ALBUM_ART_DECODED);
-                    mHandler.sendMessage(numsg);
-                }
-                mAlbumId = albumid;
-            }
-        }
-    }
-
-    private static class Worker implements Runnable {
-        private final Object mLock = new Object();
-        private Looper mLooper;
-
-        /**
-         * Creates a worker thread with the given name. The thread then runs a
-         * {@link android.os.Looper}.
-         *
-         * @param name
-         *            A name for the new thread
-         */
-        Worker(String name) {
-            Thread t = new Thread(null, this, name);
-            t.setPriority(Thread.MIN_PRIORITY);
-            t.start();
-            synchronized (mLock) {
-                while (mLooper == null) {
-                    try {
-                        mLock.wait();
-                    } catch (InterruptedException ex) {
-                    }
-                }
-            }
-        }
-
-        public Looper getLooper() {
-            return mLooper;
-        }
-
-        public void run() {
-            synchronized (mLock) {
-                Looper.prepare();
-                mLooper = Looper.myLooper();
-                mLock.notifyAll();
-            }
-            Looper.loop();
-        }
-
-        public void quit() {
-            mLooper.quit();
-        }
-    }
-
-	@Override
-	public void onCompletion(MediaPlayer mp) {
+    @Override
+    public void onCompletion(MediaPlayer mp) {
         // Leave 100ms for mediaplayer to change state.
         SystemClock.sleep(100);
         // isCompleted = true;
         mProgress.setProgress(mProgress.getMax());
         //updatePlayPause();
-        }
+    }
 
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
@@ -2178,11 +2076,6 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         queueNextRefreshForLyric(REFRESH_MILLIONS);
     }
 
-    public static final String SRC_PATH = "/Music/lrc/";
-    private static final long REFRESH_MILLIONS = 500;
-    private static final int LYRIC_SCROLL_INTERVAL = 150;
-    private static final int ENTER_LYRIC_ANIMAL_INTERVAL = 200;
-
     private void showLyric() {
         if (mIsExeLyricAnimal) {
             return;
@@ -2191,7 +2084,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         if (!mHasLrc || (!mIsLyricDisplay)) {
             try {
                 stopQueueNextRefreshForLyric();
-                setLyric(mService.getData(),mService.getTrackName());
+                setLyric(mService.getData(), mService.getTrackName());
             } catch (RemoteException ex) {
                 return;
             }
@@ -2238,7 +2131,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
                         (float) Math.hypot(mLyricPanel.getWidth(), mLyricPanel.getHeight()));
                 animatorSet.setDuration(ENTER_LYRIC_ANIMAL_INTERVAL);
                 animatorSet.setInterpolator(new AccelerateInterpolator());
-                animatorSet.playTogether(animator,alphaAnimator);
+                animatorSet.playTogether(animator, alphaAnimator);
                 animatorSet.addListener(new Animator.AnimatorListener() {
                     @Override
                     public void onAnimationStart(Animator animation) {
@@ -2343,7 +2236,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         }
     }
 
-    public void setLyric(String path,String trackName) {
+    public void setLyric(String path, String trackName) {
         if (trackName != null) {
             File lrcfile = null;
             mStrTrackName = trackName;
@@ -2423,25 +2316,6 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         }
     }
 
-    public Handler mLyricHandler = new Handler() {
-        public void handleMessage(Message msg) {
-            switch (msg.what) {
-                case REFRESH_LYRIC:
-                    try {
-                        if (mService != null && mLyric != null) {
-                            updateDuration(mService.position());
-                        }
-                    } catch (RemoteException e) {
-                        // TODO Auto-generated catch block
-                    }
-                    if (mHasLrc) {
-                        queueNextRefreshForLyric(REFRESH_MILLIONS);
-                    }
-                    break;
-            }
-        }
-    };
-
     public void updateDuration(long duration) {
         if (mHasLrc && mLyricPanel != null) {
             mLyricAdapter.setTime(duration);
@@ -2453,7 +2327,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
                     mLyricView.setSelection(0);
                 }
                 mLyricView.smoothScrollToPositionFromTop(intentSelection,
-                            mLyricView.getLyricMidPos(), LYRIC_SCROLL_INTERVAL);
+                        mLyricView.getLyricMidPos(), LYRIC_SCROLL_INTERVAL);
                 postUpdate();
                 mLyricAdapter.invalidateComplete();
             }
@@ -2478,21 +2352,13 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         }
     }
 
-    Runnable mUpdateResults = new Runnable() {
-        public void run() {
-            if (mLyricView != null) {
-                mLyricView.invalidate();
-            }
-        }
-    };
-
     public IMediaPlaybackService getService() {
         return mService;
     }
 
     @Override
     public void onScrollStateChanged(AbsListView view, int scrollState) {
-        if (scrollState  == SCROLL_STATE_TOUCH_SCROLL) {
+        if (scrollState == SCROLL_STATE_TOUCH_SCROLL) {
             mIsTouchTrigger = true;
         }
         if (mIsTouchTrigger) {
@@ -2511,17 +2377,10 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
 
     @Override
     public void onScroll(AbsListView view,
-            int firstVisibleItem,
-            int visibleItemCount,
-            int totalItemCount) {
+                         int firstVisibleItem,
+                         int visibleItemCount,
+                         int totalItemCount) {
         mFirstVisibleItem = firstVisibleItem;
-    }
-
-    private class ResumeScrollTask extends TimerTask {
-        @Override
-        public void run() {
-            mLyricSrollState = SCROLL_STATE_IDLE;
-        }
     }
 
     private void setFavoriteIconImage(boolean status) {
@@ -2589,11 +2448,106 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
                 if (lrcFile.exists()) {
                     return true;
                 }
-                if (setLocalLrc() != null) {
-                    return true;
-                }
+                return setLocalLrc() != null;
             }
         }
         return false;
+    }
+
+    private static class AlbumSongIdWrapper {
+        public long albumid;
+        public long songid;
+
+        AlbumSongIdWrapper(long aid, long sid) {
+            albumid = aid;
+            songid = sid;
+        }
+    }
+
+    private static class Worker implements Runnable {
+        private final Object mLock = new Object();
+        private Looper mLooper;
+
+        /**
+         * Creates a worker thread with the given name. The thread then runs a
+         * {@link android.os.Looper}.
+         *
+         * @param name A name for the new thread
+         */
+        Worker(String name) {
+            Thread t = new Thread(null, this, name);
+            t.setPriority(Thread.MIN_PRIORITY);
+            t.start();
+            synchronized (mLock) {
+                while (mLooper == null) {
+                    try {
+                        mLock.wait();
+                    } catch (InterruptedException ex) {
+                    }
+                }
+            }
+        }
+
+        public Looper getLooper() {
+            return mLooper;
+        }
+
+        public void run() {
+            synchronized (mLock) {
+                Looper.prepare();
+                mLooper = Looper.myLooper();
+                mLock.notifyAll();
+            }
+            Looper.loop();
+        }
+
+        public void quit() {
+            mLooper.quit();
+        }
+    }
+
+    public class AlbumArtHandler extends Handler {
+        private long mAlbumId = -1;
+
+        public AlbumArtHandler(Looper looper) {
+            super(looper);
+        }
+
+        @Override
+        public void handleMessage(Message msg) {
+            long albumid = ((AlbumSongIdWrapper) msg.obj).albumid;
+            long songid = ((AlbumSongIdWrapper) msg.obj).songid;
+            if (msg.what == GET_ALBUM_ART
+                    && (mAlbumId != albumid || albumid < 0 || mOrientationChanged)) {
+                mOrientationChanged = false;
+                // while decoding the new image, show the default album art
+                Message numsg = mHandler.obtainMessage(ALBUM_ART_DECODED,
+                        MusicUtils.getDefaultArtwork(MediaPlaybackActivity.this));
+                mHandler.removeMessages(ALBUM_ART_DECODED);
+                mHandler.sendMessageDelayed(numsg, 600);
+                // Don't allow default artwork here, because we want to fall back to
+                // song-specific album art if we can't find anything for the album.
+                Bitmap bm = MusicUtils.getArtwork(MediaPlaybackActivity.this,
+                        songid, albumid, false);
+                if (bm == null) {
+                    bm = MusicUtils.getArtwork(MediaPlaybackActivity.this,
+                            songid, -1);
+                    albumid = -1;
+                }
+                if (bm != null) {
+                    numsg = mHandler.obtainMessage(ALBUM_ART_DECODED, bm);
+                    mHandler.removeMessages(ALBUM_ART_DECODED);
+                    mHandler.sendMessage(numsg);
+                }
+                mAlbumId = albumid;
+            }
+        }
+    }
+
+    private class ResumeScrollTask extends TimerTask {
+        @Override
+        public void run() {
+            mLyricSrollState = SCROLL_STATE_IDLE;
+        }
     }
 }

@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright (c) 2014, The Linux Foundation. All rights reserved.
+<?xml version="1.0" encoding="utf-8"?><!-- Copyright (c) 2014, The Linux Foundation. All rights reserved.
      Not a Contribution.
 
      Copyright (C) 2007 The Android Open Source Project
@@ -28,63 +27,72 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="#ff5a5a5a"
+        android:orientation="horizontal"
         android:paddingTop="1dip"
-        android:paddingBottom="4dip"
-        android:orientation="horizontal">
+        android:paddingBottom="4dip">
 
-        <TextView android:id="@+id/currenttime"
-            android:textAppearance="?android:attr/textAppearanceMedium"
-            android:textSize="14sp"
-            android:textStyle="bold"
+        <TextView
+            android:id="@+id/currenttime"
+            android:layout_width="0dip"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_weight="1"
+            android:paddingStart="5dip"
             android:shadowColor="#ff000000"
             android:shadowDx="0"
             android:shadowDy="0"
             android:shadowRadius="3"
-            android:layout_gravity="bottom"
-            android:layout_weight="1"
-            android:layout_width="0dip"
-            android:paddingStart="5dip"
-            android:layout_height="wrap_content" />
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:textSize="14sp"
+            android:textStyle="bold" />
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
             android:layout_gravity="bottom"
             android:layout_marginTop="1dip"
             android:layout_marginBottom="2dip"
-            android:gravity="center">
+            android:gravity="center"
+            android:orientation="horizontal">
 
-            <com.android.music.RepeatingImageButton android:id="@+id/prev" style="@android:style/MediaButton.Next" />
+            <com.android.music.RepeatingImageButton
+                android:id="@+id/prev"
+                style="@android:style/MediaButton.Next" />
 
-            <ImageButton android:id="@+id/pause" style="@android:style/MediaButton.Play" />
+            <ImageButton
+                android:id="@+id/pause"
+                style="@android:style/MediaButton.Play" />
 
-            <com.android.music.RepeatingImageButton android:id="@+id/next" style="@android:style/MediaButton.Previous" />
+            <com.android.music.RepeatingImageButton
+                android:id="@+id/next"
+                style="@android:style/MediaButton.Previous" />
 
         </LinearLayout>
 
-        <TextView android:id="@+id/totaltime"
-            android:textAppearance="?android:attr/textAppearanceMedium"
-            android:textSize="14sp"
-            android:textStyle="bold"
+        <TextView
+            android:id="@+id/totaltime"
+            android:layout_width="0dip"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_weight="1"
+            android:gravity="end"
+            android:paddingEnd="5dip"
             android:shadowColor="#ff000000"
             android:shadowDx="0"
             android:shadowDy="0"
             android:shadowRadius="3"
-            android:gravity="end"
-            android:paddingEnd="5dip"
-            android:layout_gravity="bottom"
-            android:layout_weight="1"
-            android:layout_width="0dip"
-            android:layout_height="wrap_content" />
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:textSize="14sp"
+            android:textStyle="bold" />
 
     </LinearLayout>
 
-    <SeekBar android:id="@android:id/progress"
-        android:background="#ff5a5a5a"
+    <SeekBar
+        android:id="@android:id/progress"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
         android:layout_height="36dip"
+        android:background="#ff5a5a5a"
         android:paddingStart="8dip"
         android:paddingEnd="8dip"
         android:paddingBottom="4dip" />

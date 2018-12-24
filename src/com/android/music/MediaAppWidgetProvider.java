@@ -31,12 +31,11 @@ import android.widget.RemoteViews;
 
 /**
  * Simple widget to show currently playing album art along
- * with play/pause and next track buttons.  
+ * with play/pause and next track buttons.
  */
 public class MediaAppWidgetProvider extends AppWidgetProvider {
-    static final String TAG = "MusicAppWidgetProvider";
-    
     public static final String CMDAPPWIDGETUPDATE = "appwidgetupdate";
+    static final String TAG = "MusicAppWidgetProvider";
     private static final String UPDATE_WIDGET_ACTION = "com.android.music.updatewidget";
 
     private static MediaAppWidgetProvider sInstance;
@@ -47,15 +46,15 @@ public class MediaAppWidgetProvider extends AppWidgetProvider {
     protected int mWidgetLayoutId;
     protected String mUpdateFlag;
 
+    public MediaAppWidgetProvider() {
+        init();
+    }
+
     static synchronized MediaAppWidgetProvider getInstance() {
         if (sInstance == null) {
             sInstance = new MediaAppWidgetProvider();
         }
         return sInstance;
-    }
-
-    public MediaAppWidgetProvider() {
-        init();
     }
 
     protected void init() {
@@ -90,7 +89,7 @@ public class MediaAppWidgetProvider extends AppWidgetProvider {
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
         mNoneedperformUpdate = false;
         defaultAppWidget(context, appWidgetIds);
-        
+
         // Send broadcast intent to any running MediaPlaybackService so it can
         // wrap around with an immediate update.
         Intent updateIntent = new Intent(MediaPlaybackService.SERVICECMD);
@@ -99,7 +98,7 @@ public class MediaAppWidgetProvider extends AppWidgetProvider {
         updateIntent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY);
         context.sendBroadcast(updateIntent);
     }
-    
+
     /**
      * Initialize given widgets to default state, where we launch Music on default click
      * and hide actions if service not running.
@@ -115,7 +114,7 @@ public class MediaAppWidgetProvider extends AppWidgetProvider {
         linkButtons(context, views, false /* not playing */);
         pushUpdate(context, appWidgetIds, views);
     }
-    
+
     private void pushUpdate(Context context, int[] appWidgetIds, RemoteViews views) {
         // Update specific list of appWidgetIds if given, otherwise default to all
         final AppWidgetManager gm = AppWidgetManager.getInstance(context);
@@ -125,7 +124,7 @@ public class MediaAppWidgetProvider extends AppWidgetProvider {
             gm.updateAppWidget(new ComponentName(context, this.getClass()), views);
         }
     }
-    
+
     /**
      * Check against {@link AppWidgetManager} if there are any instances of this widget.
      */
@@ -151,9 +150,9 @@ public class MediaAppWidgetProvider extends AppWidgetProvider {
             }
         }
     }
-    
+
     /**
-     * Update all active widget instances by pushing changes 
+     * Update all active widget instances by pushing changes
      */
     void performUpdate(MediaPlaybackService service, int[] appWidgetIds) {
         if (mNoneedperformUpdate) {
@@ -178,7 +177,7 @@ public class MediaAppWidgetProvider extends AppWidgetProvider {
             artistName = res.getString(R.string.unknown_artist_name);
         }
         CharSequence errorState = null;
-        
+
         // Format title string with track number, or show SD card message
         String status = Environment.getExternalStorageState();
         if (status.equals(Environment.MEDIA_SHARED) ||
@@ -195,7 +194,7 @@ public class MediaAppWidgetProvider extends AppWidgetProvider {
                 errorState = res.getText(R.string.sdcard_missing_title_nosdcard);
             }
         }
-        
+
         if (errorState != null) {
             // Show error state to user
             views.setViewVisibility(R.id.trackname, View.GONE);
@@ -210,7 +209,7 @@ public class MediaAppWidgetProvider extends AppWidgetProvider {
             views.setViewVisibility(R.id.album, View.VISIBLE);
             views.setTextViewText(R.id.album, albumName);
         }
-        
+
         // Set correct drawable for pause state
         final boolean playing = service.isPlaying();
         if (playing) {
@@ -226,24 +225,24 @@ public class MediaAppWidgetProvider extends AppWidgetProvider {
 
         // Link actions buttons to intents
         linkButtons(service, views, playing);
-        
+
         pushUpdate(service, appWidgetIds, views);
     }
 
     /**
      * Link up various button actions using {@link PendingIntents}.
-     * 
+     *
      * @param playerActive True if player is active in background, which means
-     *            widget click will launch {@link MediaPlaybackActivity},
-     *            otherwise we launch {@link MusicBrowserActivity}.
+     *                     widget click will launch {@link MediaPlaybackActivity},
+     *                     otherwise we launch {@link MusicBrowserActivity}.
      */
     private void linkButtons(Context context, RemoteViews views, boolean playerActive) {
         // Connect up various buttons and touch events
         Intent intent;
         PendingIntent pendingIntent;
-        
+
         final ComponentName serviceName = new ComponentName(context, MediaPlaybackService.class);
-        
+
         if (playerActive) {
             intent = new Intent(context, MusicBrowserActivity.class);
             pendingIntent = PendingIntent.getActivity(context,
@@ -263,13 +262,13 @@ public class MediaAppWidgetProvider extends AppWidgetProvider {
         pendingIntent = PendingIntent.getService(context,
                 0 /* no requestCode */, intent, 0 /* no flags */);
         views.setOnClickPendingIntent(R.id.prev, pendingIntent);
-        
+
         intent = new Intent(MediaPlaybackService.TOGGLEPAUSE_ACTION);
         intent.setComponent(serviceName);
         pendingIntent = PendingIntent.getService(context,
                 0 /* no requestCode */, intent, 0 /* no flags */);
         views.setOnClickPendingIntent(R.id.pause, pendingIntent);
-        
+
         intent = new Intent(MediaPlaybackService.NEXT_ACTION);
         intent.setComponent(serviceName);
         pendingIntent = PendingIntent.getService(context,

@@ -27,9 +27,9 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.codeaurora.music.lyric;
+package com.android.music.lyric;
 
-import com.codeaurora.music.lyric.helper.EncodingDetect;
+import com.android.music.lyric.helper.EncodingDetect;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -45,13 +45,13 @@ import java.util.regex.Pattern;
 
 public class Lyric {
     public static final String TAG = "Lyric";
-    private int mOffset;
-    private long mTotalTime;
-    private transient PlayListItem mItemInfo;
-    public List<Sentence> mSentenceList = new ArrayList<Sentence>();
     private static final Pattern mPattern = Pattern.compile("(?<=\\[).*?(?=\\])");
     private static final String OFFSET = "offset";
     private static EncodingDetect mEncodingDetect;
+    public List<Sentence> mSentenceList = new ArrayList<Sentence>();
+    private int mOffset;
+    private long mTotalTime;
+    private transient PlayListItem mItemInfo;
 
     public Lyric(File lyricFile, PlayListItem itemInfo, long totalTime) {
         mOffset = itemInfo.getOffset();

@@ -30,17 +30,16 @@ package com.android.music;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.content.ComponentName;
 import android.os.Bundle;
 import android.util.Log;
 
 public class GestureHandler extends Activity {
     private static final String GESTURE_CONTROL_PLAY =
-           "com.android.music.MusticGesturePlayActivity";
+            "com.android.music.MusticGesturePlayActivity";
     private static final String GESTURE_CONTROL_PREV =
-           "com.android.music.MusticGesturePrevActivity";
+            "com.android.music.MusticGesturePrevActivity";
     private static final String GESTURE_CONTROL_NEXT =
-           "com.android.music.MusticGestureNextActivity";
+            "com.android.music.MusticGestureNextActivity";
     private static final String LOGTAG = "GestureHandler";
 
     @Override
@@ -48,7 +47,7 @@ public class GestureHandler extends Activity {
         super.onCreate(icicle);
         Intent intent = getIntent();
         String componentName = intent.getComponent().getClassName();
-        Log.d(LOGTAG,"GestureHandler get componentName : "+ componentName);
+        Log.d(LOGTAG, "GestureHandler get componentName : " + componentName);
 
         if (GESTURE_CONTROL_PLAY.equals(componentName)) {
             Intent i = new Intent(this, MediaPlaybackService.class);
@@ -67,6 +66,6 @@ public class GestureHandler extends Activity {
             this.startService(i);
         }
         finish();
-    };
+    }
 
 }

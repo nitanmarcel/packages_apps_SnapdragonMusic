@@ -28,12 +28,10 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.res.Resources;
-import android.database.CharArrayBuffer;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.graphics.Bitmap;
 import android.graphics.Color;
-import android.graphics.drawable.AnimationDrawable;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.media.AudioManager;
@@ -60,7 +58,6 @@ import android.widget.SimpleCursorAdapter;
 import android.widget.TextView;
 
 import com.android.music.MusicUtils.ServiceToken;
-import com.android.music.TrackBrowserFragment.TrackListAdapter.ViewHolder;
 
 public class QueryBrowserActivity extends ListActivity implements
         MusicUtils.Defs, ServiceConnection, OnQueryTextListener {
@@ -76,11 +73,37 @@ public class QueryBrowserActivity extends ListActivity implements
     private boolean mAdapterSent;
     private String mFilterString = "";
     private ServiceToken mToken;
+    private Handler mReScanHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            if (mAdapter != null) {
+                getQueryCursor(mAdapter.getQueryHandler(), null);
+            }
+            // if the query results in a null cursor, onQueryComplete() will
+            // call init(), which will post a delayed message to this handler
+            // in order to try again.
+        }
+    };
+    /*
+     * This listener gets called when the media scanner starts up, and when the
+     * sd card is unmounted.
+     */
+    private BroadcastReceiver mScanListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            MusicUtils.setSpinnerState(QueryBrowserActivity.this);
+            mReScanHandler.sendEmptyMessage(0);
+        }
+    };
+    private ListView mTrackList;
+    private Cursor mQueryCursor;
 
     public QueryBrowserActivity() {
     }
 
-    /** Called when the activity is first created. */
+    /**
+     * Called when the activity is first created.
+     */
     @Override
     public void onCreate(Bundle icicle) {
         super.onCreate(icicle);
@@ -141,7 +164,7 @@ public class QueryBrowserActivity extends ListActivity implements
             if (path.startsWith("content://media/external/audio/media/")) {
                 // This is a specific file
                 String id = uri.getLastPathSegment();
-                long[] list = new long[] { Long.valueOf(id) };
+                long[] list = new long[]{Long.valueOf(id)};
                 MusicUtils.playAll(this, list, 0);
                 finish();
                 return;
@@ -169,9 +192,9 @@ public class QueryBrowserActivity extends ListActivity implements
         }
         setContentView(R.layout.query_activity);
         ActionBar bar = getActionBar();
-        if(bar!=null){
-        bar.setBackgroundDrawable(new ColorDrawable(Color.parseColor(this.getResources().getString(R.color.colorPrimary))));
-        bar.setDisplayHomeAsUpEnabled(true);
+        if (bar != null) {
+            bar.setBackgroundDrawable(new ColorDrawable(Color.parseColor(this.getResources().getString(R.color.colorPrimary))));
+            bar.setDisplayHomeAsUpEnabled(true);
         }
 
         mTrackList = getListView();
@@ -180,7 +203,7 @@ public class QueryBrowserActivity extends ListActivity implements
         if (mAdapter == null) {
             mAdapter = new QueryListAdapter(getApplication(), this,
                     R.layout.track_list_item, null, // cursor
-                    new String[] {}, new int[] {});
+                    new String[]{}, new int[]{});
             setListAdapter(mAdapter);
             if (TextUtils.isEmpty(mFilterString)) {
                 getQueryCursor(mAdapter.getQueryHandler(), null);
@@ -254,41 +277,17 @@ public class QueryBrowserActivity extends ListActivity implements
         super.onDestroy();
     }
 
-    /*
-     * This listener gets called when the media scanner starts up, and when the
-     * sd card is unmounted.
-     */
-    private BroadcastReceiver mScanListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            MusicUtils.setSpinnerState(QueryBrowserActivity.this);
-            mReScanHandler.sendEmptyMessage(0);
-        }
-    };
-
-    private Handler mReScanHandler = new Handler() {
-        @Override
-        public void handleMessage(Message msg) {
-            if (mAdapter != null) {
-                getQueryCursor(mAdapter.getQueryHandler(), null);
-            }
-            // if the query results in a null cursor, onQueryComplete() will
-            // call init(), which will post a delayed message to this handler
-            // in order to try again.
-        }
-    };
-
     @Override
     protected void onActivityResult(int requestCode, int resultCode,
-            Intent intent) {
+                                    Intent intent) {
         switch (requestCode) {
-        case SCAN_DONE:
-            if (resultCode == RESULT_CANCELED) {
-                finish();
-            } else {
-                getQueryCursor(mAdapter.getQueryHandler(), null);
-            }
-            break;
+            case SCAN_DONE:
+                if (resultCode == RESULT_CANCELED) {
+                    finish();
+                } else {
+                    getQueryCursor(mAdapter.getQueryHandler(), null);
+                }
+                break;
         }
     }
 
@@ -351,7 +350,7 @@ public class QueryBrowserActivity extends ListActivity implements
             MusicUtils.isLaunchedFromQueryBrowser = true;
             startActivity(intent);
         } else if (position >= 0 && id >= 0) {
-            long[] list = new long[] { id };
+            long[] list = new long[]{id};
             MusicUtils.playAll(this, list, 0);
         } else {
             Log.e("QueryBrowser", "invalid position/id: " + position + "/" + id);
@@ -361,17 +360,17 @@ public class QueryBrowserActivity extends ListActivity implements
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
-        case USE_AS_RINGTONE: {
-            // Set the system setting to make this the current ringtone
-            MusicUtils.setRingtone(this, mTrackList.getSelectedItemId());
-            return true;
-        }
-        case android.R.id.home: {
-            // Set the system setting to make this the current ringtone
+            case USE_AS_RINGTONE: {
+                // Set the system setting to make this the current ringtone
+                MusicUtils.setRingtone(this, mTrackList.getSelectedItemId());
+                return true;
+            }
+            case android.R.id.home: {
+                // Set the system setting to make this the current ringtone
 
-            finish();
-            return true;
-        }
+                finish();
+                return true;
+            }
 
         }
         return super.onOptionsItemSelected(item);
@@ -381,12 +380,12 @@ public class QueryBrowserActivity extends ListActivity implements
         if (filter == null) {
             filter = "";
         }
-        String[] ccols = new String[] {
+        String[] ccols = new String[]{
                 BaseColumns._ID, // this will be the artist, album or track ID
                 MediaStore.Audio.Media.MIME_TYPE, // mimetype of audio file, or
-                                                    // "artist" or "album"
+                // "artist" or "album"
                 MediaStore.Audio.Artists.ARTIST, MediaStore.Audio.Albums.ALBUM,
-                MediaStore.Audio.Media.TITLE, "data1", "data2" };
+                MediaStore.Audio.Media.TITLE, "data1", "data2"};
 
         Uri search = Uri.parse("content://media/external/audio/search/fancy/"
                 + Uri.encode(filter));
@@ -400,39 +399,38 @@ public class QueryBrowserActivity extends ListActivity implements
         return ret;
     }
 
+    @Override
+    public boolean onQueryTextSubmit(String query) {
+        // TODO Auto-generated method stub
+        if (mTrackList != null) {
+            mTrackList.setFilterText(query);
+        }
+        return false;
+    }
+
+    @Override
+    public boolean onQueryTextChange(String newText) {
+        if (mAdapter != null) {
+            mAdapter.getFilter().filter(newText);
+        }
+        return false;
+    }
+
     static class QueryListAdapter extends SimpleCursorAdapter {
-        private QueryBrowserActivity mActivity = null;
         private final BitmapDrawable mDefaultAlbumIcon;
+        private QueryBrowserActivity mActivity = null;
         private AsyncQueryHandler mQueryHandler;
         private String mConstraint = null;
         private boolean mConstraintIsValid = false;
 
-        class QueryHandler extends AsyncQueryHandler {
-            QueryHandler(ContentResolver res) {
-                super(res);
-            }
-
-            @Override
-            protected void onQueryComplete(int token, Object cookie,
-                    Cursor cursor) {
-                mActivity.init(cursor);
-            }
-        }
-
         QueryListAdapter(Context context, QueryBrowserActivity currentactivity,
-                int layout, Cursor cursor, String[] from, int[] to) {
+                         int layout, Cursor cursor, String[] from, int[] to) {
             super(context, layout, cursor, from, to);
             mActivity = currentactivity;
             Resources r = mActivity.getResources();
             mDefaultAlbumIcon = (BitmapDrawable) r
                     .getDrawable(R.drawable.unknown_albums);
             mQueryHandler = new QueryHandler(context.getContentResolver());
-        }
-
-        static class ViewHolder {
-            TextView line1;
-            TextView line2;
-            ImageView icon;
         }
 
         public void setActivity(QueryBrowserActivity newactivity) {
@@ -448,9 +446,9 @@ public class QueryBrowserActivity extends ListActivity implements
             // TODO Auto-generated method stub
             View v = super.newView(context, cursor, parent);
             ViewHolder vh = new ViewHolder();
-            vh.line1 = (TextView) v.findViewById(R.id.line1);
-            vh.line2 = (TextView) v.findViewById(R.id.line2);
-            vh.icon = (ImageView) v.findViewById(R.id.icon);
+            vh.line1 = v.findViewById(R.id.line1);
+            vh.line2 = v.findViewById(R.id.line2);
+            vh.icon = v.findViewById(R.id.icon);
             v.findViewById(R.id.animView).setVisibility(View.INVISIBLE);
             v.findViewById(R.id.play_indicator).setVisibility(View.INVISIBLE);
             v.setTag(vh);
@@ -475,7 +473,7 @@ public class QueryBrowserActivity extends ListActivity implements
             }
             String artistname = cursor.getString(cursor
                     .getColumnIndexOrThrow(MediaStore.Audio.Artists.ARTIST));
-            Bitmap albumart[] = MusicUtils.getFromLruCache(
+            Bitmap[] albumart = MusicUtils.getFromLruCache(
                     artistname, MusicUtils.mArtCache);
             if (albumart != null) {
                 if (albumart[0] != null) {
@@ -576,7 +574,7 @@ public class QueryBrowserActivity extends ListActivity implements
             String s = constraint.toString();
             if (mConstraintIsValid
                     && ((s == null && mConstraint == null) || (s != null && s
-                            .equals(mConstraint)))) {
+                    .equals(mConstraint)))) {
                 return getCursor();
             }
             Cursor c = mActivity.getQueryCursor(null, s);
@@ -584,25 +582,23 @@ public class QueryBrowserActivity extends ListActivity implements
             mConstraintIsValid = true;
             return c;
         }
-    }
 
-    private ListView mTrackList;
-    private Cursor mQueryCursor;
-
-    @Override
-    public boolean onQueryTextSubmit(String query) {
-        // TODO Auto-generated method stub
-        if (mTrackList != null) {
-            mTrackList.setFilterText(query);
+        static class ViewHolder {
+            TextView line1;
+            TextView line2;
+            ImageView icon;
         }
-        return false;
-    }
 
-    @Override
-    public boolean onQueryTextChange(String newText) {
-        if (mAdapter != null) {
-            mAdapter.getFilter().filter(newText);
+        class QueryHandler extends AsyncQueryHandler {
+            QueryHandler(ContentResolver res) {
+                super(res);
+            }
+
+            @Override
+            protected void onQueryComplete(int token, Object cookie,
+                                           Cursor cursor) {
+                mActivity.init(cursor);
+            }
         }
-        return false;
     }
 }

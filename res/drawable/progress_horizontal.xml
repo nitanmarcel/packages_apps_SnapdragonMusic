@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright (C) 2008 The Android Open Source Project
+<?xml version="1.0" encoding="utf-8"?><!-- Copyright (C) 2008 The Android Open Source Project
 
      Licensed under the Apache License, Version 2.0 (the "License");
      you may not use this file except in compliance with the License.
@@ -19,7 +18,7 @@
     <item android:id="@android:id/background">
         <nine-patch
             android:dither="true"
-            android:src="@drawable/progress_bg"/>
+            android:src="@drawable/progress_bg" />
     </item>
 
     <!-- Can't actually use
@@ -30,10 +29,11 @@
         <clip xmlns:android="http://schemas.android.com/apk/res/android"
             android:clipOrientation="horizontal"
             android:gravity="left">
-            <nine-patch android:src="@drawable/progress" android:dither="true"/>
+            <nine-patch
+                android:dither="true"
+                android:src="@drawable/progress" />
         </clip>
     </item>
-
 
 
 </layer-list>

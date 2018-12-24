@@ -18,7 +18,6 @@ package com.android.music;
 
 import android.app.Activity;
 import android.app.Fragment;
-import android.app.ListActivity;
 import android.content.AsyncQueryHandler;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -34,7 +33,6 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -44,49 +42,87 @@ import android.os.Message;
 import android.provider.MediaStore;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
-import android.view.View.OnClickListener;
-import android.view.KeyEvent;
 import android.view.LayoutInflater;
-import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
+import android.view.View.OnClickListener;
 import android.view.ViewGroup;
-import android.view.Window;
 import android.widget.AdapterView;
 import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.AdapterView.OnItemClickListener;
-import android.widget.PopupMenu.OnMenuItemClickListener;
 import android.widget.AlphabetIndexer;
-import android.widget.ExpandableListView;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.PopupMenu;
+import android.widget.PopupMenu.OnMenuItemClickListener;
 import android.widget.SectionIndexer;
 import android.widget.SimpleCursorAdapter;
 import android.widget.TextView;
 
 import com.android.music.MusicUtils.Defs;
 import com.android.music.MusicUtils.ServiceToken;
-import com.android.music.SysApplication;
 
 public class FolderBrowserFragment extends Fragment
-        implements View.OnCreateContextMenuListener, MusicUtils.Defs, ServiceConnection, OnItemClickListener
-{
+        implements View.OnCreateContextMenuListener, MusicUtils.Defs, ServiceConnection, OnItemClickListener {
     private static String mCurretParent;
     private static String mCurrentPath;
-    private FolderListAdapter mAdapter;
-    private boolean mAdapterSent;
     private static int mLastListPosCourse = -1;
     private static int mLastListPosFine = -1;
-    private ServiceToken mToken;
     private static Cursor mFilesCursor;
+    private static SubMenu mSub = null;
+    public PopupMenu mPopupMenu;
+    private FolderListAdapter mAdapter;
+    private boolean mAdapterSent;
+    private ServiceToken mToken;
     private TextView mSdErrorMessageView;
     private View mSdErrorMessageIcon;
     private ListView mFolderList;
     private MediaPlaybackActivity mActivity;
-    public PopupMenu mPopupMenu;
-    private static SubMenu mSub = null;
+    private BroadcastReceiver mTrackListListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            mFolderList.invalidateViews();
+            mActivity.updateNowPlaying(mActivity);
+        }
+    };
+    private Handler mReScanHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            if (mAdapter != null) {
+                getFolderCursor(mAdapter.getQueryHandler(), null);
+            }
+        }
+    };
+    private BroadcastReceiver mScanListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            MusicUtils.setSpinnerState(mActivity);
+            mReScanHandler.sendEmptyMessage(0);
+            if (intent.getAction().equals(Intent.ACTION_MEDIA_UNMOUNTED)) {
+                MusicUtils.clearAlbumArtCache();
+            }
+        }
+    };
+
+    public static String getRootPath(String path) {
+        if (path != null) {
+            String root = "";
+            int pos = path.lastIndexOf("/");
+            if (pos >= 0) {
+                root = path.substring(0, pos);
+            }
+            return root;
+        } else {
+            return "";
+        }
+    }
+
+   /* @Override
+    public Object onRetainNonConfigurationInstance() {
+        mAdapterSent = true;
+        return mAdapter;
+    }*/
 
     public Activity getParentActivity() {
         return mActivity;
@@ -97,14 +133,15 @@ public class FolderBrowserFragment extends Fragment
         super.onAttach(activity);
         mActivity = (MediaPlaybackActivity) activity;
     }
+
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
-            Bundle savedInstanceState) {
+                             Bundle savedInstanceState) {
         View rootView = inflater.inflate(
                 R.layout.media_picker_folder, container, false);
-        mSdErrorMessageView = (TextView) rootView.findViewById(R.id.sd_message);
+        mSdErrorMessageView = rootView.findViewById(R.id.sd_message);
         mSdErrorMessageIcon = rootView.findViewById(R.id.sd_icon);
-        mFolderList = (ListView) rootView.findViewById(R.id.folder_list);
+        mFolderList = rootView.findViewById(R.id.folder_list);
         mFolderList.setTextFilterEnabled(true);
         mFolderList.setOnItemClickListener(this);
         mFolderList.setDividerHeight(0);
@@ -114,27 +151,21 @@ public class FolderBrowserFragment extends Fragment
                 this,
                 R.layout.track_list_item,
                 mFilesCursor,
-                new String[] {},
-                new int[] {});
+                new String[]{},
+                new int[]{});
         mFolderList.setAdapter(mAdapter);
         getFolderCursor(mAdapter.getQueryHandler(), null);
         return rootView;
     }
+
     @Override
-    public void onCreate(Bundle icicle)
-    {
+    public void onCreate(Bundle icicle) {
         super.onCreate(icicle);
         if (icicle != null) {
             mCurretParent = icicle.getString("selectedParent");
         }
         mToken = MusicUtils.bindToService(mActivity, this);
     }
-
-   /* @Override
-    public Object onRetainNonConfigurationInstance() {
-        mAdapterSent = true;
-        return mAdapter;
-    }*/
 
     @Override
     public void onSaveInstanceState(Bundle outcicle) {
@@ -144,7 +175,7 @@ public class FolderBrowserFragment extends Fragment
 
     @Override
     public void onDestroy() {
-        if (mPopupMenu != null ) {
+        if (mPopupMenu != null) {
             mPopupMenu.dismiss();
         }
         if (mSub != null) {
@@ -177,41 +208,7 @@ public class FolderBrowserFragment extends Fragment
         mActivity.registerReceiver(mTrackListListener, f);
         mTrackListListener.onReceive(null, null);
 
-       // MusicUtils.setSpinnerState(this);
-    }
-
-    private BroadcastReceiver mTrackListListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            mFolderList.invalidateViews();
-            mActivity.updateNowPlaying(mActivity);
-        }
-    };
-    private BroadcastReceiver mScanListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            MusicUtils.setSpinnerState(mActivity);
-            mReScanHandler.sendEmptyMessage(0);
-            if (intent.getAction().equals(Intent.ACTION_MEDIA_UNMOUNTED)) {
-                MusicUtils.clearAlbumArtCache();
-            }
-        }
-    };
-
-    private Handler mReScanHandler = new Handler() {
-        @Override
-        public void handleMessage(Message msg) {
-            if (mAdapter != null) {
-                getFolderCursor(mAdapter.getQueryHandler(), null);
-            }
-        }
-    };
-
-    @Override
-    public void onPause() {
-        mActivity.unregisterReceiver(mTrackListListener);
-        mReScanHandler.removeCallbacksAndMessages(null);
-        super.onPause();
+        // MusicUtils.setSpinnerState(this);
     }
 
     /*@Override
@@ -223,6 +220,13 @@ public class FolderBrowserFragment extends Fragment
         }
         return super.dispatchKeyEvent(event);
     }*/
+
+    @Override
+    public void onPause() {
+        mActivity.unregisterReceiver(mTrackListListener);
+        mReScanHandler.removeCallbacksAndMessages(null);
+        super.onPause();
+    }
 
     public void init(Cursor c) {
         if (mAdapter == null) {
@@ -365,7 +369,7 @@ public class FolderBrowserFragment extends Fragment
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
         switch (requestCode) {
             case SCAN_DONE:
-                if (resultCode == mActivity.RESULT_CANCELED) {
+                if (resultCode == Activity.RESULT_CANCELED) {
                     mActivity.finish();
                 } else {
                     getFolderCursor(mAdapter.getQueryHandler(), null);
@@ -373,7 +377,7 @@ public class FolderBrowserFragment extends Fragment
                 break;
 
             case NEW_PLAYLIST:
-                if (resultCode == mActivity.RESULT_OK) {
+                if (resultCode == Activity.RESULT_OK) {
                     Uri uri = intent.getData();
                     if (uri != null) {
                         long[] list = MusicUtils.getSongListForFolder(mActivity,
@@ -386,22 +390,22 @@ public class FolderBrowserFragment extends Fragment
         }
     }
 
-    public String getAlbumName(String path){
+    public String getAlbumName(String path) {
         String name;
         String mUnknownPath = mActivity.getString(R.string.unknown_folder_name);
         String rootPath = getRootPath(path);
-          if (path == null || path.trim().equals("")) {
-              name = mUnknownPath;
-          } else {
-              String[] split = rootPath.split("/");
-              name = split[split.length - 1];
-          }
-          return name;
+        if (path == null || path.trim().equals("")) {
+            name = mUnknownPath;
+        } else {
+            String[] split = rootPath.split("/");
+            name = split[split.length - 1];
+        }
+        return name;
     }
 
     @Override
     public void onItemClick(AdapterView<?> parentview, View view, int position,
-            long id) {
+                            long id) {
         //Intent intent = new Intent(Intent.ACTION_PICK);
         //intent.setDataAndType(Uri.EMPTY, "vnd.android.cursor.dir/track");
         Cursor c = (Cursor) mAdapter.getItem(position);
@@ -410,8 +414,8 @@ public class FolderBrowserFragment extends Fragment
         //intent.putExtra("parent", parent);
         index = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA);
         String path = c.getString(index);
-      //  intent.putExtra("rootPath", getRootPath(path));
-       // startActivity(intent);
+        //  intent.putExtra("rootPath", getRootPath(path));
+        // startActivity(intent);
 
         Fragment fragment = new TrackBrowserFragment();
         Bundle args = new Bundle();
@@ -430,8 +434,8 @@ public class FolderBrowserFragment extends Fragment
     private Cursor getFolderCursor(AsyncQueryHandler async, String filter) {
         Cursor ret = null;
         String uriString = "content://media/external/file";
-        String selection = "is_music = 1 & 1=1 ) GROUP BY (parent" ;
-        String[] projection = {"count(*)","_id","_data","parent"};
+        String selection = "is_music = 1 & 1=1 ) GROUP BY (parent";
+        String[] projection = {"count(*)", "_id", "_data", "parent"};
         Uri uri = Uri.parse(uriString);
         if (async != null) {
             async.startQuery(0, null, uri, projection, selection, null, null);
@@ -441,55 +445,50 @@ public class FolderBrowserFragment extends Fragment
         return ret;
     }
 
-    public static String getRootPath(String path) {
-        if (path != null) {
-            String root = "";
-            int pos = path.lastIndexOf("/");
-            if (pos >= 0) {
-                root = path.substring(0, pos);
-            }
-            return root;
-        } else {
-            return "";
-        }
+    public void onServiceConnected(ComponentName name, IBinder service) {
+        mActivity
+                .updateNowPlaying(getActivity());
     }
 
-     class FolderListAdapter extends SimpleCursorAdapter implements SectionIndexer {
+    public void onServiceDisconnected(ComponentName name) {
+        mActivity.finish();
+    }
 
-        private Drawable mNowPlaying;
+    @Override
+    public void onConfigurationChanged(Configuration config) {
+        super.onConfigurationChanged(config);
+        if (mPopupMenu != null) {
+            mPopupMenu.dismiss();
+        }
+        if (mSub != null) {
+            mSub.close();
+        }
+        Fragment fragment = new FolderBrowserFragment();
+        Bundle args = getArguments();
+        fragment.setArguments(args);
+        getFragmentManager().beginTransaction()
+                .replace(R.id.fragment_page, fragment, "folder_fragment")
+                .commitAllowingStateLoss();
+    }
+
+    class FolderListAdapter extends SimpleCursorAdapter implements SectionIndexer {
+
         private final BitmapDrawable mDefaultAlbumIcon;
-        private int mDataIdx;
-        private int mCountIdx;
         private final Resources mResources;
         private final String mUnknownPath;
         private final String mUnknownCount;
+        private final Object[] mFormatArgs = new Object[1];
+        private Drawable mNowPlaying;
+        private int mDataIdx;
+        private int mCountIdx;
         private AlphabetIndexer mIndexer;
         private FolderBrowserFragment mFragment;
         private AsyncQueryHandler mQueryHandler;
         private String mConstraint = null;
         private boolean mConstraintIsValid = false;
-        private final Object[] mFormatArgs = new Object[1];
-
-        class ViewHolder {
-            TextView line1;
-            TextView line2;
-            ImageView play_indicator;
-            ImageView icon;
-        }
-
-        class QueryHandler extends AsyncQueryHandler {
-            QueryHandler(ContentResolver res) {
-                super(res);
-            }
-
-            @Override
-            protected void onQueryComplete(int token, Object cookie, Cursor cursor) {
-                mFragment.init(cursor);
-            }
-        }
 
         FolderListAdapter(Context context, FolderBrowserFragment currentfragment,
-                int layout, Cursor cursor, String[] from, int[] to) {
+                          int layout, Cursor cursor, String[] from, int[] to) {
             super(context, layout, cursor, from, to);
 
             mFragment = currentfragment;
@@ -531,9 +530,9 @@ public class FolderBrowserFragment extends Fragment
         public View newView(Context context, Cursor cursor, ViewGroup parent) {
             View v = super.newView(context, cursor, parent);
             ViewHolder vh = new ViewHolder();
-            vh.line1 = (TextView) v.findViewById(R.id.line1);
-            vh.line2 = (TextView) v.findViewById(R.id.line2);
-            vh.play_indicator = (ImageView) v.findViewById(R.id.play_indicator);
+            vh.line1 = v.findViewById(R.id.line1);
+            vh.line2 = v.findViewById(R.id.line2);
+            vh.play_indicator = v.findViewById(R.id.play_indicator);
             View animView = v.findViewById(R.id.animView);
             animView.setVisibility(View.GONE);
             //vh.icon = (ImageView) v.findViewById(R.id.icon);
@@ -545,7 +544,7 @@ public class FolderBrowserFragment extends Fragment
 
         @Override
         public void bindView(View view, Context context, final Cursor cursor) {
-          final  ViewHolder vh = (ViewHolder) view.getTag();
+            final ViewHolder vh = (ViewHolder) view.getTag();
 
             String path = cursor.getString(mDataIdx);
             String rootPath = getRootPath(path);
@@ -568,15 +567,15 @@ public class FolderBrowserFragment extends Fragment
                 numString = mResources.getQuantityString(R.plurals.Nsongs, count, args);
             }
 
-             final int p = cursor.getPosition();
+            final int p = cursor.getPosition();
             vh.line2.setText(numString);
 
             vh.play_indicator.setOnClickListener(new OnClickListener() {
 
                 @Override
                 public void onClick(View v) {
-                   // mFragment.mCurrentAlbumName = vh.mCurrentAlbumName;
-                    if (mFragment.mPopupMenu != null ) {
+                    // mFragment.mCurrentAlbumName = vh.mCurrentAlbumName;
+                    if (mFragment.mPopupMenu != null) {
                         mFragment.mPopupMenu.dismiss();
                     }
                     PopupMenu popup = new PopupMenu(mFragment
@@ -616,13 +615,13 @@ public class FolderBrowserFragment extends Fragment
                 cursor.close();
                 cursor = null;
             }
-            if (cursor != mFragment.mFilesCursor) {
-                if (mFragment.mFilesCursor != null) {
-                    mFragment.mFilesCursor.close();
-                    mFragment.mFilesCursor = null;
+            if (cursor != mFilesCursor) {
+                if (mFilesCursor != null) {
+                    mFilesCursor.close();
+                    mFilesCursor = null;
                 }
-                mFragment.mFilesCursor = cursor;
-                if ((cursor != null && !cursor.isClosed()) || cursor == null) {
+                mFilesCursor = cursor;
+                if (cursor == null || !cursor.isClosed()) {
                     getColumnIndices(cursor);
                     super.changeCursor(cursor);
                 }
@@ -634,7 +633,7 @@ public class FolderBrowserFragment extends Fragment
             String s = constraint.toString();
             if (mConstraintIsValid && (
                     (s == null && mConstraint == null) ||
-                    (s != null && s.equals(mConstraint)))) {
+                            (s != null && s.equals(mConstraint)))) {
                 return getCursor();
             }
             Cursor c = mFragment.getFolderCursor(null, s);
@@ -654,31 +653,23 @@ public class FolderBrowserFragment extends Fragment
         public int getSectionForPosition(int position) {
             return 0;
         }
-    }
 
-    public void onServiceConnected(ComponentName name, IBinder service) {
-        ((MediaPlaybackActivity) mActivity)
-        .updateNowPlaying(getActivity());
-    }
-
-    public void onServiceDisconnected(ComponentName name) {
-        mActivity.finish();
-    }
-
-    @Override
-    public void onConfigurationChanged(Configuration config) {
-        super.onConfigurationChanged(config);
-        if (mPopupMenu != null) {
-            mPopupMenu.dismiss();
+        class ViewHolder {
+            TextView line1;
+            TextView line2;
+            ImageView play_indicator;
+            ImageView icon;
         }
-        if (mSub != null) {
-            mSub.close();
+
+        class QueryHandler extends AsyncQueryHandler {
+            QueryHandler(ContentResolver res) {
+                super(res);
+            }
+
+            @Override
+            protected void onQueryComplete(int token, Object cookie, Cursor cursor) {
+                mFragment.init(cursor);
+            }
         }
-        Fragment fragment = new FolderBrowserFragment();
-        Bundle args = getArguments();
-        fragment.setArguments(args);
-        getFragmentManager().beginTransaction()
-                .replace(R.id.fragment_page, fragment, "folder_fragment")
-                .commitAllowingStateLoss();
     }
 }

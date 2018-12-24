@@ -29,8 +29,6 @@
 
 package com.android.music;
 
-import java.util.ArrayList;
-
 import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -40,12 +38,14 @@ import android.widget.ImageView;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
+import java.util.ArrayList;
+
 public class NavigationDrawerListAdapter extends BaseAdapter {
 
-    private int curTab = 0;
     Context mContext;
     ArrayList<String> mListItemNames = new ArrayList<String>();
     ArrayList<Integer> mListItemIcons = new ArrayList<Integer>();
+    private int curTab = 0;
 
     public NavigationDrawerListAdapter(Context context) {
         mContext = context;
@@ -58,7 +58,7 @@ public class NavigationDrawerListAdapter extends BaseAdapter {
 
         if (MusicUtils.isGroupByFolder()) {
             mListItemNames.add(context.getResources().getString(
-                R.string.folders_title));
+                    R.string.folders_title));
         }
         mListItemNames.add(context.getResources().getString(
                 R.string.playlists_title));
@@ -101,9 +101,9 @@ public class NavigationDrawerListAdapter extends BaseAdapter {
             view = convertView;
         }
 
-        TextView titleView = (TextView) view.findViewById(R.id.title);
-        ImageView iconView = (ImageView) view.findViewById(R.id.icon);
-        RelativeLayout layout = (RelativeLayout) view.findViewById(R.id.layout);
+        TextView titleView = view.findViewById(R.id.title);
+        ImageView iconView = view.findViewById(R.id.icon);
+        RelativeLayout layout = view.findViewById(R.id.layout);
 
         titleView.setText(mListItemNames.get(position));
         iconView.setImageResource(mListItemIcons.get(position));

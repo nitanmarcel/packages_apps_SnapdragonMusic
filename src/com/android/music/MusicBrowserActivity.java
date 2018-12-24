@@ -16,61 +16,42 @@
 
 package com.android.music;
 
-import java.util.ArrayList;
-
-import com.android.music.MusicUtils.ServiceToken;
-import com.codeaurora.music.custom.FragmentsFactory;
-import com.codeaurora.music.custom.MusicPanelLayout;
-import com.codeaurora.music.custom.MusicPanelLayout.ViewHookSlipListener;
-import com.codeaurora.music.custom.MusicPanelLayout.BoardState;
-import com.codeaurora.music.custom.PermissionActivity;
-
 import android.Manifest.permission;
 import android.app.Fragment;
 import android.app.FragmentManager;
-import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.ContentResolver;
-import android.content.ContentUris;
 import android.content.ContentValues;
-import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
-import android.content.res.Configuration;
-import android.content.res.Resources;
-import android.database.Cursor;
-import android.graphics.Color;
-import android.graphics.drawable.BitmapDrawable;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.RemoteException;
 import android.provider.MediaStore;
-import android.support.v4.app.ActionBarDrawerToggle;
 import android.support.v4.widget.DrawerLayout;
-import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
-import android.view.KeyEvent;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.Window;
-import android.view.WindowManager;
-import android.webkit.WebView.FindListener;
 import android.widget.AdapterView;
 import android.widget.FrameLayout;
-import android.widget.ImageButton;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
-import android.widget.Toolbar;
 import android.widget.Toolbar.OnMenuItemClickListener;
+
+import com.android.music.MusicUtils.ServiceToken;
+import com.android.music.custom.FragmentsFactory;
+import com.android.music.custom.MusicPanelLayout.BoardState;
+import com.android.music.custom.MusicPanelLayout.ViewHookSlipListener;
+import com.android.music.custom.PermissionActivity;
+
+import java.util.ArrayList;
 
 public class MusicBrowserActivity extends MediaPlaybackActivity implements
         MusicUtils.Defs {
@@ -79,13 +60,6 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
             permission.READ_PHONE_STATE,
             permission.READ_EXTERNAL_STORAGE,
             permission.WRITE_EXTERNAL_STORAGE};
-
-    private ServiceToken mToken;
-    private ListView mDrawerListView;
-    private DrawerLayout mDrawerLayout;
-    public static boolean mIsparentActivityFInishing;
-    private ArrayList<Fragment> mMusicFragments;
-    private int activeTab;
     private static final long RECENTLY_ADDED_PLAYLIST = -1;
     private static final long ALL_SONGS_PLAYLIST = -2;
     private static final long PODCASTS_PLAYLIST = -3;
@@ -95,10 +69,44 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
     private static final int LIST_HEIGHT_NON_CMCC_MODE = 45 * 4;
     //number of menu items in CMCC mode are 5 (includes "Folder")
     private static final int LIST_HEIGHT_CMCC_MODE = 45 * 5;
+    public static boolean mIsparentActivityFInishing;
     NavigationDrawerListAdapter mNavigationAdapter;
     String mArtistID, mAlbumID;
     String mIntentAction;
     long mPlaylistId = DEFAULT_PLAYLIST;
+    private ServiceToken mToken;
+    private ListView mDrawerListView;
+    private DrawerLayout mDrawerLayout;
+    private ArrayList<Fragment> mMusicFragments;
+    private int activeTab;
+    private Thread mFavoritePlaylistThread = new Thread() {
+        @Override
+        public void run() {
+            if (checkSelfPermission(permission.READ_EXTERNAL_STORAGE) ==
+                    PackageManager.PERMISSION_GRANTED)
+                createFavoritePlaylist();
+        }
+    };
+    private ServiceConnection autoshuffle = new ServiceConnection() {
+        public void onServiceConnected(ComponentName classname, IBinder obj) {
+            // we need to be able to bind again, so unbind
+            try {
+                unbindService(this);
+            } catch (IllegalArgumentException e) {
+            }
+            IMediaPlaybackService serv = IMediaPlaybackService.Stub
+                    .asInterface(obj);
+            if (serv != null) {
+                try {
+                    serv.setShuffleMode(MediaPlaybackService.SHUFFLE_AUTO);
+                } catch (RemoteException ex) {
+                }
+            }
+        }
+
+        public void onServiceDisconnected(ComponentName classname) {
+        }
+    };
 
     public MusicBrowserActivity() {
     }
@@ -135,15 +143,6 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
         }
     }
 
-    private Thread mFavoritePlaylistThread = new Thread() {
-        @Override
-        public void run() {
-            if (checkSelfPermission(permission.READ_EXTERNAL_STORAGE) ==
-                    PackageManager.PERMISSION_GRANTED)
-            createFavoritePlaylist();
-        }
-    };
-
     private void createFavoritePlaylist() {
         // TODO Auto-generated method stub
         ContentResolver resolver = getContentResolver();
@@ -161,16 +160,16 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
     }
 
     public void initView() {
-        mNowPlayingIcon = (ImageView) findViewById(R.id.nowplay_icon);
+        mNowPlayingIcon = findViewById(R.id.nowplay_icon);
         mNowPlayingIcon.setOnClickListener(mPauseListener);
-        mDrawerListView = (ListView) findViewById(R.id.navList);
+        mDrawerListView = findViewById(R.id.navList);
         int height = MusicUtils.isGroupByFolder() ? LIST_HEIGHT_CMCC_MODE
-                     : LIST_HEIGHT_NON_CMCC_MODE;
+                : LIST_HEIGHT_NON_CMCC_MODE;
         height = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, height,
-                      getResources().getDisplayMetrics());
+                getResources().getDisplayMetrics());
         mDrawerListView.getLayoutParams().height = height;
-        RelativeLayout equalizerLayout = (RelativeLayout) findViewById(R.id.equalizer_btn_view);
-        RelativeLayout exitLayout = (RelativeLayout) findViewById(R.id.exit_btn_view);
+        RelativeLayout equalizerLayout = findViewById(R.id.equalizer_btn_view);
+        RelativeLayout exitLayout = findViewById(R.id.exit_btn_view);
         if (getApplicationContext().getResources().getBoolean(R.bool.exit_in_drawer)) {
             exitLayout.setVisibility(View.VISIBLE);
         } else {
@@ -183,7 +182,7 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
                 .setOnItemClickListener(new AdapterView.OnItemClickListener() {
                     @Override
                     public void onItemClick(AdapterView<?> parent, View view,
-                            int position, long id) {
+                                            int position, long id) {
                         if (mIsPanelExpanded) {
                             getSlidingPanelLayout().setHookState(
                                     BoardState.COLLAPSED);
@@ -198,20 +197,23 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
                             @Override
                             public void onDrawerSlide(View drawerView, float slideOffset) {
                             }
+
                             @Override
                             public void onDrawerOpened(View drawerView) {
                             }
+
                             @Override
                             public void onDrawerClosed(View drawerView) {
                                 showScreen(toShowPosition);
                             }
+
                             @Override
                             public void onDrawerStateChanged(int newState) {
                             }
                         });
                     }
                 });
-        mDrawerLayout = (DrawerLayout) findViewById(R.id.drawerLayout);
+        mDrawerLayout = findViewById(R.id.drawerLayout);
 
         equalizerLayout.setOnClickListener(new OnClickListener() {
 
@@ -257,11 +259,10 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
             public void onClick(View v) {
                 if (mToolbar.getNavigationContentDescription().equals("drawer")) {
                     mDrawerLayout.openDrawer(Gravity.START);
-                }else {
+                } else {
                     showScreen(MusicUtils.navigatingTabPosition);
                     mToolbar.setNavigationContentDescription("drawer");
-                    mToolbar
-                    .setNavigationIcon(R.drawable.ic_material_light_navigation_drawer);
+                    mToolbar.setNavigationIcon(R.drawable.ic_material_light_navigation_drawer);
                 }
             }
         });
@@ -286,8 +287,8 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
                             mIsPanelExpanded = false;
                             try {
                                 Thread.sleep(200);  //This is to let the sliding panel collapse and
-                                                    //not to see graphic corruption.
-                            } catch(InterruptedException ie) {
+                                //not to see graphic corruption.
+                            } catch (InterruptedException ie) {
                                 ie.printStackTrace();
                             }
                         }
@@ -324,9 +325,9 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
             }
         }
 
-        int maxTabPosition = mNavigationAdapter.getCount()-1;
-        if(position > maxTabPosition){
-           position = 0;
+        int maxTabPosition = mNavigationAdapter.getCount() - 1;
+        if (position > maxTabPosition) {
+            position = 0;
         }
         mNavigationAdapter.setClickPosition(position);
         mDrawerListView.invalidateViews();
@@ -342,7 +343,7 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
         }
         mDrawerListView.setItemChecked(position, true);
         mDrawerListView.setSelection(position);
-        FrameLayout fl = (FrameLayout) findViewById(R.id.fragment_page);
+        FrameLayout fl = findViewById(R.id.fragment_page);
         fl.setVisibility(View.VISIBLE);
         findViewById(R.id.music_tool_bar).setVisibility(View.VISIBLE);
         MusicUtils.setIntPref(this, "activetab", position);
@@ -368,7 +369,7 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
             } else if (mPlaylistId == PODCASTS_PLAYLIST) {
                 bundle.putString("playlist", "podcasts");
             } else {
-                if(mPlaylistId != ALL_SONGS_PLAYLIST) {
+                if (mPlaylistId != ALL_SONGS_PLAYLIST) {
                     bundle.putBoolean("editValue", true);
                     bundle.putString("playlist", Long.valueOf(mPlaylistId)
                             .toString());
@@ -379,13 +380,12 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
             mPlaylistId = DEFAULT_PLAYLIST;
         } else if (mIntentAction != null
                 && mIntentAction
-                        .equalsIgnoreCase(Intent.ACTION_CREATE_SHORTCUT)) {
+                .equalsIgnoreCase(Intent.ACTION_CREATE_SHORTCUT)) {
             fragment = new PlaylistBrowserFragment();
             Bundle bundle = new Bundle();
             bundle.putBoolean("isFromShortcut", true);
             fragment.setArguments(bundle);
-        }
-        else {
+        } else {
             fragment = FragmentsFactory.loadFragment(position);
         }
         if (!fragment.isAdded()) {
@@ -415,27 +415,6 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
         MusicUtils.clearAlbumArtCache();
         super.onDestroy();
     }
-
-    private ServiceConnection autoshuffle = new ServiceConnection() {
-        public void onServiceConnected(ComponentName classname, IBinder obj) {
-            // we need to be able to bind again, so unbind
-            try {
-                unbindService(this);
-            } catch (IllegalArgumentException e) {
-            }
-            IMediaPlaybackService serv = IMediaPlaybackService.Stub
-                    .asInterface(obj);
-            if (serv != null) {
-                try {
-                    serv.setShuffleMode(MediaPlaybackService.SHUFFLE_AUTO);
-                } catch (RemoteException ex) {
-                }
-            }
-        }
-
-        public void onServiceDisconnected(ComponentName classname) {
-        }
-    };
 
     /**
      * No-op stubs for {@link PanelSlideListener}. If you only want to implement

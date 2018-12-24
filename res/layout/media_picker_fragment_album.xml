@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
+<?xml version="1.0" encoding="utf-8"?><!--
      Copyright (C) 2007 The Android Open Source Project
 
      Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +19,7 @@
     android:layout_height="match_parent"
     android:background="#fafafa"
     android:gravity="center_vertical"
-    android:orientation="vertical" >
+    android:orientation="vertical">
 
     <include layout="@layout/sd_error" />
 
@@ -30,13 +29,12 @@
         android:layout_height="0dp"
         android:layout_marginStart="@dimen/album_left_margin"
         android:layout_marginEnd="@dimen/album_right_margin"
-        android:clipToPadding="false"
-        android:paddingTop="@dimen/album_top_margin"
         android:layout_weight="1"
+        android:clipToPadding="false"
         android:fastScrollEnabled="true"
         android:horizontalSpacing="@dimen/album_list_space_horizontal"
         android:numColumns="2"
-        android:verticalSpacing="@dimen/album_list_space" >
-    </GridView>
+        android:paddingTop="@dimen/album_top_margin"
+        android:verticalSpacing="@dimen/album_list_space"></GridView>
 
 </LinearLayout>

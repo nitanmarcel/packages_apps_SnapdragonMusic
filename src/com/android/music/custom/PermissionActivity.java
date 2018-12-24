@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.codeaurora.music.custom;
+package com.android.music.custom;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -37,14 +37,13 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
-import android.util.Log;
 
 import com.android.music.R;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class PermissionActivity extends Activity{
+public class PermissionActivity extends Activity {
     private static final String PERVIOUS_INTENT = "pervious_intent";
     private static final String REQUEST_PERMISSIONS = "request_permissions";
     private static final String KEY_FROM_PREVIEW = "from_preview";
@@ -78,21 +77,6 @@ public class PermissionActivity extends Activity{
         }
     }
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        mPreviousIntent = (Intent)getIntent().getExtras().get(PERVIOUS_INTENT);
-        mIsFromPreview = getIntent().getBooleanExtra(KEY_FROM_PREVIEW, false);
-        mRequestedPermissons = getIntent().getStringArrayExtra(REQUEST_PERMISSIONS);
-        if (savedInstanceState == null && mRequestedPermissons != null) {
-            String[] neededPermissions =
-                    checkRequestedPermission(PermissionActivity.this, mRequestedPermissons);
-            if (neededPermissions != null && neededPermissions.length != 0) {
-                requestPermissions(neededPermissions, REQUEST_CODE);
-            }
-        }
-    }
-
     public static String[] checkRequestedPermission(Activity activity, String[] permissionName) {
         boolean isPermissionGranted = true;
         List<String> needRequestPermission = new ArrayList<String>();
@@ -109,8 +93,23 @@ public class PermissionActivity extends Activity{
     }
 
     @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        mPreviousIntent = (Intent) getIntent().getExtras().get(PERVIOUS_INTENT);
+        mIsFromPreview = getIntent().getBooleanExtra(KEY_FROM_PREVIEW, false);
+        mRequestedPermissons = getIntent().getStringArrayExtra(REQUEST_PERMISSIONS);
+        if (savedInstanceState == null && mRequestedPermissons != null) {
+            String[] neededPermissions =
+                    checkRequestedPermission(PermissionActivity.this, mRequestedPermissons);
+            if (neededPermissions != null && neededPermissions.length != 0) {
+                requestPermissions(neededPermissions, REQUEST_CODE);
+            }
+        }
+    }
+
+    @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                int[] grantResults) {
+                                           int[] grantResults) {
         boolean isAllPermissionsGranted = true;
         if (requestCode != REQUEST_CODE || permissions == null || grantResults == null ||
                 permissions.length == 0 || grantResults.length == 0) {
@@ -121,14 +120,14 @@ public class PermissionActivity extends Activity{
                     isAllPermissionsGranted = false;
             }
         }
-        if(isAllPermissionsGranted) {
+        if (isAllPermissionsGranted) {
             if (mPreviousIntent != null)
-                if (mIsFromPreview){
+                if (mIsFromPreview) {
                     startActivity(mPreviousIntent);
                     setResult(Activity.RESULT_OK);
                 } else {
                     if (mPreviousIntent != null)
-                    startActivity(mPreviousIntent);
+                        startActivity(mPreviousIntent);
                 }
             finish();
         } else {
@@ -141,23 +140,25 @@ public class PermissionActivity extends Activity{
         builder.setTitle(R.string.dialog_title_help);
         builder.setMessage(R.string.dialog_content);
         builder.setNegativeButton(R.string.dialog_button_quit,
-        new DialogInterface.OnClickListener() {
-            @Override public void onClick(DialogInterface dialog, int which) {
-                if (mIsFromPreview){
-                    setResult(Activity.RESULT_CANCELED);
-                }
-                finish();
-            }
-        });
+                new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        if (mIsFromPreview) {
+                            setResult(Activity.RESULT_CANCELED);
+                        }
+                        finish();
+                    }
+                });
         builder.setPositiveButton(R.string.dialog_button_settings,
-        new DialogInterface.OnClickListener() {
-            @Override public void onClick(DialogInterface dialog, int which) {
-                Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                intent.setData(Uri.parse(PACKAGE_URL_SCHEME + getPackageName()));
-                startActivity(intent);
-                finish();
-            }
-        });
+                new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                        intent.setData(Uri.parse(PACKAGE_URL_SCHEME + getPackageName()));
+                        startActivity(intent);
+                        finish();
+                    }
+                });
         builder.show();
     }
 }

@@ -54,9 +54,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:ellipsize="marquee"
-            android:textColor="@color/colorTextPrimary"
             android:marqueeRepeatLimit="marquee_forever"
             android:singleLine="true"
+            android:textColor="@color/colorTextPrimary"
             android:textSize="16sp" />
 
         <TextView
@@ -64,9 +64,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:ellipsize="marquee"
-            android:textColor="@color/colorTextSecondary"
             android:marqueeRepeatLimit="marquee_forever"
             android:maxLength="28"
+            android:textColor="@color/colorTextSecondary"
             android:textSize="12sp" />
     </LinearLayout>
 

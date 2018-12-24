@@ -27,69 +27,62 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.codeaurora.music.lyric;
+package com.android.music.lyric;
 
-public class PlayListItem {
-    protected String mName = "";
-    protected boolean mIsFile = true;
-    protected long mSeconds = -1;
-    private String mTitle;
-    private int mOffset;
+public class Sentence {
+    private long mFromTime;
+    private long mToTime;
+    private String mContent;
+
+    public Sentence(String content, long fromTime, long toTime) {
+        mContent = content;
+        mFromTime = fromTime;
+        mToTime = toTime;
+    }
+
+    public Sentence(String content, long fromTime) {
+        this(content, fromTime, 0);
+    }
+
+    public Sentence(String content) {
+        this(content, 0, 0);
+    }
+
+    public long getFromTime() {
+        return mFromTime;
+    }
+
+    public void setFromTime(long fromTime) {
+        mFromTime = fromTime;
+    }
+
+    public long getToTime() {
+        return mToTime;
+    }
+
+    public void setToTime(long toTime) {
+        mToTime = toTime;
+    }
 
     /**
+     * Analyzing the current time is being played this line lyrics.
      *
-     * @param name     Song name to be displayed
-     * @param seconds  Time length
-     * @param isFile   true for File instance
+     * @param time the current time.
+     * @return true if the current time is being played this line lyrics, false otherwise.
      */
-    public PlayListItem(String name, long seconds, boolean isFile) {
-        mName = name;
-        mSeconds = seconds;
-        mIsFile = isFile;
+    public boolean isInTime(long time) {
+        return time >= mFromTime && time <= mToTime;
     }
 
-    public int getOffset() {
-        return mOffset;
+    public String getContent() {
+        return mContent;
     }
 
-    public void setOffset(int offset) {
-        mOffset = offset;
+    public long getDuring() {
+        return mToTime - mFromTime;
     }
 
-    public void setDuration(long sec) {
-        mSeconds = sec;
-    }
-
-    public String getFormattedName() {
-        return mName;
-    }
-
-    public String getName() {
-        return mName;
-    }
-
-    public boolean isFile() {
-        return mIsFile;
-    }
-
-    public void setFile(boolean b) {
-        mIsFile = b;
-    }
-
-    public long getLength() {
-        return mSeconds;
-    }
-
-    public String getTitle() {
-        if (mTitle != null) {
-            return mTitle;
-        } else {
-            mTitle = mName;
-        }
-        return mTitle;
-    }
-
-    public void setTitle(String title) {
-        mTitle = title;
+    public String toString() {
+        return "{" + mFromTime + "(" + mContent + ")" + mToTime + "}";
     }
 }

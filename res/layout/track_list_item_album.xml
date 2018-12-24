@@ -30,8 +30,8 @@
     android:layout_width="match_parent"
     android:layout_height="220dp"
     android:layout_marginTop="@dimen/album_list_space"
-    android:elevation="2dp"
-    android:background="@color/colorBackground">
+    android:background="@color/colorBackground"
+    android:elevation="2dp">
 
     <include layout="@layout/track_list_item_common_album" />
 

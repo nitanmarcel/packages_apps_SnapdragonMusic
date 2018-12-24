@@ -27,52 +27,49 @@ import android.provider.MediaStore;
 import android.view.Window;
 import android.view.WindowManager;
 
-public class ScanningProgress extends Activity
-{
+public class ScanningProgress extends Activity {
     private final static int CHECK = 0;
     private final static int EXTERNAL_CHECK_OK = 1;
     private final static int EXTERNAL_CHECK_FAILED = 2;
     private Handler mHandler = new Handler() {
         @Override
-        public void handleMessage(Message msg)
-        {
+        public void handleMessage(Message msg) {
             switch (msg.what) {
-            case CHECK:
-                String status = Environment.getExternalStorageState();
-                if (!status.equals(Environment.MEDIA_MOUNTED)) {
-                   // If the card suddenly got unmounted again, there's
-                   // really no need to keep waiting for the media scanner.
-                   finish();
-                   return;
-                }
+                case CHECK:
+                    String status = Environment.getExternalStorageState();
+                    if (!status.equals(Environment.MEDIA_MOUNTED)) {
+                        // If the card suddenly got unmounted again, there's
+                        // really no need to keep waiting for the media scanner.
+                        finish();
+                        return;
+                    }
 
-                // new one thread to run the runnable,
-                // the thread will quit it self after running
-                new Thread(mCheckExternalMediaThread).start();
+                    // new one thread to run the runnable,
+                    // the thread will quit it self after running
+                    new Thread(mCheckExternalMediaThread).start();
 
-                break;
-            case EXTERNAL_CHECK_OK:
-                setResult(RESULT_OK);
-                finish();
-                return;
-            case EXTERNAL_CHECK_FAILED:
-                Message next = obtainMessage(CHECK);
-                sendMessageDelayed(next, 3000);
-                break;
-            default:
-                break;
+                    break;
+                case EXTERNAL_CHECK_OK:
+                    setResult(RESULT_OK);
+                    finish();
+                    return;
+                case EXTERNAL_CHECK_FAILED:
+                    Message next = obtainMessage(CHECK);
+                    sendMessageDelayed(next, 3000);
+                    break;
+                default:
+                    break;
             }
         }
     };
-
     private Runnable mCheckExternalMediaThread = new Runnable() {
-         @Override
-         public void run() {
-             int result = isExternalMediaDatabaseReady() ?
-                          EXTERNAL_CHECK_OK : EXTERNAL_CHECK_FAILED;
-             Message message = mHandler.obtainMessage(result);
-             mHandler.sendMessage(message);
-         }
+        @Override
+        public void run() {
+            int result = isExternalMediaDatabaseReady() ?
+                    EXTERNAL_CHECK_OK : EXTERNAL_CHECK_FAILED;
+            Message message = mHandler.obtainMessage(result);
+            mHandler.sendMessage(message);
+        }
     };
 
     private boolean isExternalMediaDatabaseReady() {
@@ -83,7 +80,7 @@ public class ScanningProgress extends Activity
                     MediaStore.Audio.Playlists.EXTERNAL_CONTENT_URI,
                     null, null, null, null);
             isReady = (cursor != null);
-        } catch (Exception exception){
+        } catch (Exception exception) {
             isReady = false;
         } finally {
             if (cursor != null) {
@@ -105,13 +102,13 @@ public class ScanningProgress extends Activity
             setContentView(R.layout.scanning_nosdcard);
         }
         getWindow().setLayout(WindowManager.LayoutParams.WRAP_CONTENT,
-                                    WindowManager.LayoutParams.WRAP_CONTENT);
+                WindowManager.LayoutParams.WRAP_CONTENT);
         setResult(RESULT_CANCELED);
-        
+
         Message msg = mHandler.obtainMessage(CHECK);
         mHandler.sendMessageDelayed(msg, 1000);
     }
-    
+
     @Override
     public void onDestroy() {
         mHandler.removeMessages(CHECK);

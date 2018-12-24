@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
+<?xml version="1.0" encoding="utf-8"?><!--
      Copyright (C) 2008 The Android Open Source Project
 
      Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,23 +19,23 @@
     android:layout_height="match_parent"
     android:background="@color/colorBackground"
     android:gravity="center_vertical"
-    android:orientation="vertical" >
+    android:orientation="vertical">
 
     <include
+        layout="@layout/sd_error"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_gravity="center"
-        layout="@layout/sd_error" />
+        android:layout_gravity="center" />
 
     <ExpandableListView
         android:id="@+id/artist_list"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:clipToPadding="false"
-        android:paddingTop="8dp"
         android:layout_weight="1"
         android:background="@color/colorBackground"
         android:cacheColorHint="#00000000"
+        android:clipToPadding="false"
+        android:paddingTop="8dp"
         android:scrollingCache="false"
         android:textSize="18sp" />
 

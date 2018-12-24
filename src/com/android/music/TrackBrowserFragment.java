@@ -19,17 +19,10 @@
 
 package com.android.music;
 
-import com.android.music.MusicUtils.Defs;
-import com.android.music.MusicUtils.ServiceToken;
-import com.android.music.TrackBrowserFragment.TrackListAdapter.ViewHolder;
-
-import android.R.integer;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Fragment;
-import android.app.FragmentManager;
-import android.app.ListActivity;
 import android.app.SearchManager;
 import android.content.AsyncQueryHandler;
 import android.content.BroadcastReceiver;
@@ -47,16 +40,11 @@ import android.content.res.Resources;
 import android.database.AbstractCursor;
 import android.database.CharArrayBuffer;
 import android.database.Cursor;
-//import android.drm.DrmManagerClientWrapper;
-import android.drm.DrmStore.Action;
-//import android.drm.DrmStore.DrmDeliveryType;
-import android.drm.DrmStore.RightsStatus;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.BitmapFactory;
+import android.graphics.Paint;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.graphics.Paint;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -68,49 +56,42 @@ import android.os.RemoteException;
 import android.provider.MediaStore;
 import android.provider.MediaStore.Audio.Playlists;
 import android.provider.MediaStore.Video.VideoColumns;
-import android.telephony.SubscriptionInfo;
-import android.telephony.SubscriptionManager;
-import android.telephony.TelephonyManager;
 import android.text.TextUtils;
+import android.util.AttributeSet;
 import android.util.Log;
-import android.view.ContextMenu;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
-import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
-import android.view.View.OnKeyListener;
 import android.view.View.OnClickListener;
+import android.view.View.OnKeyListener;
 import android.view.ViewGroup;
 import android.view.Window;
-import android.view.ContextMenu.ContextMenuInfo;
-import android.widget.AdapterView;
-import android.widget.AbsListView.OnScrollListener;
-import android.widget.AdapterView.OnItemClickListener;
 import android.widget.AbsListView;
+import android.widget.AbsListView.OnScrollListener;
+import android.widget.AdapterView;
+import android.widget.AdapterView.OnItemClickListener;
 import android.widget.AlphabetIndexer;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.PopupMenu;
-import android.widget.RelativeLayout;
-//import android.widget.SectionIndexer;
-//import android.widget.SimpleCursorAdapter;
-import android.widget.TextView;
-import android.widget.Toast;
-import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.PopupMenu.OnMenuItemClickListener;
-import android.util.AttributeSet;
-import android.view.KeyEvent;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
 
-import com.android.music.SysApplication;
-import com.codeaurora.music.custom.FragmentsFactory;
-import com.codeaurora.music.custom.MusicPanelLayout.BoardState;
+import com.android.music.MusicUtils.Defs;
+import com.android.music.MusicUtils.ServiceToken;
+import com.android.music.custom.MusicPanelLayout.BoardState;
 
-import java.text.Collator;
 import java.util.Arrays;
 import java.util.HashMap;
+
+//import android.drm.DrmManagerClientWrapper;
+//import android.drm.DrmStore.DrmDeliveryType;
+//import android.widget.SectionIndexer;
+//import android.widget.SimpleCursorAdapter;
 
 public class TrackBrowserFragment extends Fragment implements
         View.OnCreateContextMenuListener, MusicUtils.Defs, ServiceConnection,
@@ -129,7 +110,9 @@ public class TrackBrowserFragment extends Fragment implements
     private static final String LOGTAG = "TrackBrowser";
     private final static int TOTAL_LIST_ITEMS = 10;
     private static final String FAVORITE_PLAYLIST = "-100";
-
+    public static volatile boolean isScrolling = false;
+    public boolean mPause = false;
+    public PopupMenu mPopupMenu;
     private String[] mCursorCols;
     private String[] mPlaylistMemberCols;
     private boolean mDeletedOneRow = false;
@@ -143,6 +126,14 @@ public class TrackBrowserFragment extends Fragment implements
     private ListView mTrackList;
     private Cursor mTrackCursor;
     private TrackListAdapter mAdapter;
+    Handler handler = new Handler() {
+        public void handleMessage(Message msg) {
+            if (mAdapter != null) {
+                mAdapter.notifyDataSetChanged();
+            }
+        }
+
+    };
     private boolean mAdapterSent = false;
     private String mAlbumId;
     private String mArtistId;
@@ -163,12 +154,117 @@ public class TrackBrowserFragment extends Fragment implements
     private View mSdErrorMessageIcon;
     private RelativeLayout mShuffleLayout;
     private WaveView mAnimView;
-    public boolean mPause = false;
     private String mFolderName;
     private boolean mCreateShortcut = false;
-    public static volatile boolean isScrolling = false;
     private int lastVisiblePos = 0;
-    public PopupMenu mPopupMenu;
+    private TouchInterceptor.DropListener mDropListener = new TouchInterceptor.DropListener() {
+        public void drop(int from, int to) {
+            if (mTrackCursor instanceof NowPlayingCursor) {
+                // update the currently playing list
+                NowPlayingCursor c = (NowPlayingCursor) mTrackCursor;
+                c.moveItem(from, to);
+                ((TrackListAdapter) mTrackList.getAdapter())
+                        .notifyDataSetChanged();
+                mTrackList.invalidateViews();
+                mDeletedOneRow = true;
+            } else {
+                // update a saved playlist
+                MediaStore.Audio.Playlists.Members.moveItem(
+                        mParentActivity.getContentResolver(),
+                        Long.valueOf(mPlaylist), from, to);
+            }
+        }
+    };
+    private TouchInterceptor.RemoveListener mRemoveListener = new TouchInterceptor.RemoveListener() {
+        public void remove(int which) {
+            removePlaylistItem(which);
+        }
+    };
+    private BroadcastReceiver mTrackListListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            mTrackList.invalidateViews();
+            mParentActivity.updateNowPlaying(getParentActivity());
+        }
+    };
+    // Receiver of PLAYSTATE_CHANGED to set the icon of play state
+    private BroadcastReceiver mStatusListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (action.equals(MediaPlaybackService.PLAYSTATE_CHANGED)) {
+                if (null != mAdapter)
+                    getTrackCursor(mAdapter.getQueryHandler(), null, true);
+                mParentActivity.updateNowPlaying(getParentActivity());
+            }
+        }
+    };
+    private Handler mReScanHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            if (mAdapter != null) {
+                getTrackCursor(mAdapter.getQueryHandler(), null, true);
+            }
+            // if the query results in a null cursor, onQueryComplete() will
+            // call init(), which will post a delayed message to this handler
+            // in order to try again.
+        }
+    };
+    /*
+     * This listener gets called when the media scanner starts up or finishes,
+     * and when the sd card is unmounted.
+     */
+    private BroadcastReceiver mScanListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (Intent.ACTION_MEDIA_SCANNER_STARTED.equals(action)
+                    || Intent.ACTION_MEDIA_SCANNER_FINISHED.equals(action)) {
+                MusicUtils.setSpinnerState(mParentActivity);
+            }
+            mReScanHandler.sendEmptyMessage(0);
+        }
+    };
+    private BroadcastReceiver mNowPlayingListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent.getAction().equals(MediaPlaybackService.META_CHANGED)) {
+                mTrackList.invalidateViews();
+                mParentActivity.updateNowPlaying(getParentActivity());
+            } else if (intent.getAction().equals(
+                    MediaPlaybackService.QUEUE_CHANGED)) {
+                if (mDeletedOneRow) {
+                    // This is the notification for a single row that was
+                    // deleted previously, which is already reflected in
+                    // the UI.
+                    mDeletedOneRow = false;
+                    return;
+                }
+                // The service could disappear while the broadcast was in
+                // flight,
+                // so check to see if it's still valid
+                if (MusicUtils.sService == null) {
+                    mParentActivity.finish();
+                    return;
+                }
+                if (mAdapter != null) {
+                    Cursor c = new NowPlayingCursor(MusicUtils.sService,
+                            mCursorCols);
+                    if (c.getCount() == 0) {
+                        if (mParentActivity.mIsPanelExpanded) {
+                            mParentActivity.getSlidingPanelLayout()
+                                    .setHookState(BoardState.HIDDEN);
+                            mParentActivity.mIsPanelExpanded = false;
+                            mParentActivity.getNowPlayingView().setVisibility(
+                                    View.GONE);
+                        }
+                        return;
+                    }
+                    mAdapter.changeCursor(c);
+                }
+            }
+        }
+    };
 
     public TrackBrowserFragment() {
     }
@@ -199,7 +295,9 @@ public class TrackBrowserFragment extends Fragment implements
         mEditMode = false;
     }
 
-    /** Called when the activity is first created. */
+    /**
+     * Called when the activity is first created.
+     */
     @Override
     public void onCreate(Bundle icicle) {
         super.onCreate(icicle);
@@ -223,7 +321,7 @@ public class TrackBrowserFragment extends Fragment implements
             }
         }
 
-        mCursorCols = new String[] {
+        mCursorCols = new String[]{
                 MediaStore.Audio.Media._ID,
                 MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.DATA,
                 MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.ARTIST,
@@ -231,7 +329,7 @@ public class TrackBrowserFragment extends Fragment implements
                 MediaStore.Audio.Media.DURATION,
                 MediaStore.Audio.Media.SIZE
         };
-        mPlaylistMemberCols = new String[] {
+        mPlaylistMemberCols = new String[]{
                 MediaStore.Audio.Playlists.Members._ID,
                 MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.DATA,
                 MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.ARTIST,
@@ -256,14 +354,14 @@ public class TrackBrowserFragment extends Fragment implements
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
-            Bundle savedInstanceState) {
+                             Bundle savedInstanceState) {
         View rootView = inflater.inflate(R.layout.media_picker_fragment,
                 container, false);
-        mShuffleLayout = (RelativeLayout) rootView
+        mShuffleLayout = rootView
                 .findViewById(R.id.shuffleLayout);
-        mSdErrorMessageView = (TextView) rootView.findViewById(R.id.sd_message);
+        mSdErrorMessageView = rootView.findViewById(R.id.sd_message);
         mSdErrorMessageIcon = rootView.findViewById(R.id.sd_icon);
-        mTrackList = (ListView) rootView.findViewById(R.id.list);
+        mTrackList = rootView.findViewById(R.id.list);
         mTrackList.setCacheColorHint(0);
         mTrackList.setDividerHeight(0);
         if (mEditMode) {
@@ -296,7 +394,7 @@ public class TrackBrowserFragment extends Fragment implements
         });
         mTrackList.setOnItemClickListener(this);
         mTrackList.setOnScrollListener(this);
-        ImageButton shuffleAll = (ImageButton) rootView
+        ImageButton shuffleAll = rootView
                 .findViewById(R.id.shuffleAll);
         shuffleAll.setOnClickListener(new OnClickListener() {
 
@@ -305,7 +403,7 @@ public class TrackBrowserFragment extends Fragment implements
                 // TODO Auto-generated method stub
                 Cursor cursor = MusicUtils.query(mParentActivity,
                         MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                        new String[] { MediaStore.Audio.Media._ID },
+                        new String[]{MediaStore.Audio.Media._ID},
                         MediaStore.Audio.Media.IS_MUSIC + "=1", null,
                         MediaStore.Audio.Media.DEFAULT_SORT_ORDER);
                 if (cursor != null) {
@@ -323,15 +421,15 @@ public class TrackBrowserFragment extends Fragment implements
                         && curpos >= 0 && event.getMetaState() != 0
                         && event.getAction() == KeyEvent.ACTION_DOWN) {
                     switch (event.getKeyCode()) {
-                    case KeyEvent.KEYCODE_DPAD_UP:
-                        moveItem(true);
-                        return true;
-                    case KeyEvent.KEYCODE_DPAD_DOWN:
-                        moveItem(false);
-                        return true;
-                    case KeyEvent.KEYCODE_DEL:
-                        removeItem();
-                        return true;
+                        case KeyEvent.KEYCODE_DPAD_UP:
+                            moveItem(true);
+                            return true;
+                        case KeyEvent.KEYCODE_DPAD_DOWN:
+                            moveItem(false);
+                            return true;
+                        case KeyEvent.KEYCODE_DEL:
+                            removeItem();
+                            return true;
                     }
                 } else if (event.getAction() == KeyEvent.ACTION_UP
                         && event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
@@ -355,16 +453,16 @@ public class TrackBrowserFragment extends Fragment implements
         if (mAdapter == null) {
             mAdapter = new TrackListAdapter(
                     mParentActivity.getApplication(), // need to use application
-                                                      // context to avoid leaks
+                    // context to avoid leaks
                     this,
                     mEditMode ? R.layout.edit_track_list_item
                             : R.layout.track_list_item,
                     null, // cursor
-                    new String[] {}, new int[] {},
+                    new String[]{}, new int[]{},
                     "nowplaying".equals(mPlaylist),
                     mPlaylist != null
                             && !(mPlaylist.equals("podcasts") || mPlaylist
-                                    .equals("recentlyadded")));
+                            .equals("recentlyadded")));
             mTrackList.setAdapter(mAdapter);
             getTrackCursor(mAdapter.getQueryHandler(), null, true);
         } else {
@@ -385,7 +483,7 @@ public class TrackBrowserFragment extends Fragment implements
         mParentActivity.updateNowPlaying(mParentActivity);
 
         Cursor cursor = getTrackCursor(mAdapter.getQueryHandler(), null, false);
-        new MusicUtils.AlbumBitmapDownloadThread(getParentActivity(), cursor,handler,
+        new MusicUtils.AlbumBitmapDownloadThread(getParentActivity(), cursor, handler,
                 lastVisiblePos, lastVisiblePos + TOTAL_LIST_ITEMS).start();
     }
 
@@ -396,7 +494,7 @@ public class TrackBrowserFragment extends Fragment implements
 
     @Override
     public void onDestroy() {
-        if (mPopupMenu != null ) {
+        if (mPopupMenu != null) {
             mPopupMenu.dismiss();
         }
         if (mSubMenu != null) {
@@ -505,47 +603,6 @@ public class TrackBrowserFragment extends Fragment implements
         return mParentActivity;
     }
 
-    /*
-     * This listener gets called when the media scanner starts up or finishes,
-     * and when the sd card is unmounted.
-     */
-    private BroadcastReceiver mScanListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (Intent.ACTION_MEDIA_SCANNER_STARTED.equals(action)
-                    || Intent.ACTION_MEDIA_SCANNER_FINISHED.equals(action)) {
-                MusicUtils.setSpinnerState(mParentActivity);
-            }
-            mReScanHandler.sendEmptyMessage(0);
-        }
-    };
-
-    // Receiver of PLAYSTATE_CHANGED to set the icon of play state
-    private BroadcastReceiver mStatusListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (action.equals(MediaPlaybackService.PLAYSTATE_CHANGED)) {
-                if (null != mAdapter)
-                    getTrackCursor(mAdapter.getQueryHandler(), null, true);
-                mParentActivity.updateNowPlaying(getParentActivity());
-            }
-        }
-    };
-
-    private Handler mReScanHandler = new Handler() {
-        @Override
-        public void handleMessage(Message msg) {
-            if (mAdapter != null) {
-                getTrackCursor(mAdapter.getQueryHandler(), null, true);
-            }
-            // if the query results in a null cursor, onQueryComplete() will
-            // call init(), which will post a delayed message to this handler
-            // in order to try again.
-        }
-    };
-
     public void onSaveInstanceState(Bundle outcicle) {
         // need to store the selected item so we don't lose it in case
         // of an orientation switch. Otherwise we could lose it while
@@ -608,11 +665,12 @@ public class TrackBrowserFragment extends Fragment implements
         IntentFilter f = new IntentFilter();
         f.addAction(MediaPlaybackService.META_CHANGED);
         f.addAction(MediaPlaybackService.QUEUE_CHANGED);
-            mParentActivity.registerReceiver(mTrackListListener,
-                    new IntentFilter(f));
-            mTrackListListener.onReceive(mParentActivity, new Intent(
-                    MediaPlaybackService.META_CHANGED));
+        mParentActivity.registerReceiver(mTrackListListener,
+                new IntentFilter(f));
+        mTrackListListener.onReceive(mParentActivity, new Intent(
+                MediaPlaybackService.META_CHANGED));
     }
+
     private void setAlbumArtBackground() {
         if (!mEditMode) {
             try {
@@ -654,11 +712,11 @@ public class TrackBrowserFragment extends Fragment implements
                         + MediaStore.Audio.Media.ARTIST_ID
                         + "="
                         + mTrackCursor
-                                .getLong(mTrackCursor
-                                        .getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST_ID));
+                        .getLong(mTrackCursor
+                                .getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST_ID));
                 Cursor cursor = MusicUtils.query(mParentActivity,
                         MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                        new String[] { MediaStore.Audio.Media.ALBUM }, where,
+                        new String[]{MediaStore.Audio.Media.ALBUM}, where,
                         null, null);
                 if (cursor != null) {
                     if (cursor.getCount() != numresults) {
@@ -686,10 +744,10 @@ public class TrackBrowserFragment extends Fragment implements
             } else if (mPlaylist.equals("recentlyadded")) {
                 fancyName = getText(R.string.recentlyadded_title);
             } else {
-                String[] cols = new String[] { MediaStore.Audio.Playlists.NAME };
+                String[] cols = new String[]{MediaStore.Audio.Playlists.NAME};
                 Cursor cursor = MusicUtils.query(mParentActivity, ContentUris
-                        .withAppendedId(Playlists.EXTERNAL_CONTENT_URI,
-                                Long.valueOf(mPlaylist)), cols, null, null,
+                                .withAppendedId(Playlists.EXTERNAL_CONTENT_URI,
+                                        Long.valueOf(mPlaylist)), cols, null, null,
                         null);
                 if (cursor != null) {
                     if (cursor.getCount() != 0) {
@@ -700,7 +758,7 @@ public class TrackBrowserFragment extends Fragment implements
                 }
             }
         } else if (mGenre != null) {
-            String[] cols = new String[] { MediaStore.Audio.Genres.NAME };
+            String[] cols = new String[]{MediaStore.Audio.Genres.NAME};
             Cursor cursor = MusicUtils.query(mParentActivity, ContentUris
                     .withAppendedId(
                             MediaStore.Audio.Genres.EXTERNAL_CONTENT_URI,
@@ -718,41 +776,16 @@ public class TrackBrowserFragment extends Fragment implements
             if ("My recordings".equals(fancyName)) {
                 mParentActivity.mToolbar.setTitle(R.string.audio_db_playlist_name);
             } else if (mCreateShortcut) {
-               mParentActivity.mToolbar.setTitle(fancyName);
+                mParentActivity.mToolbar.setTitle(fancyName);
             }
         } else {
             if (MusicUtils.isGroupByFolder() && mFolderName != null) {
                 mParentActivity.mToolbar.setTitle(mFolderName);
-            }else{
-            mParentActivity.setTitle(R.string.tracks_title);
-        }
-    }
-    }
-
-    private TouchInterceptor.DropListener mDropListener = new TouchInterceptor.DropListener() {
-        public void drop(int from, int to) {
-            if (mTrackCursor instanceof NowPlayingCursor) {
-                // update the currently playing list
-                NowPlayingCursor c = (NowPlayingCursor) mTrackCursor;
-                c.moveItem(from, to);
-                ((TrackListAdapter) mTrackList.getAdapter())
-                        .notifyDataSetChanged();
-                mTrackList.invalidateViews();
-                mDeletedOneRow = true;
             } else {
-                // update a saved playlist
-                MediaStore.Audio.Playlists.Members.moveItem(
-                        mParentActivity.getContentResolver(),
-                        Long.valueOf(mPlaylist), from, to);
+                mParentActivity.setTitle(R.string.tracks_title);
             }
         }
-    };
-
-    private TouchInterceptor.RemoveListener mRemoveListener = new TouchInterceptor.RemoveListener() {
-        public void remove(int which) {
-            removePlaylistItem(which);
-        }
-    };
+    }
 
     private void removePlaylistItem(int which) {
         View v = mTrackList.getChildAt(which
@@ -791,55 +824,6 @@ public class TrackBrowserFragment extends Fragment implements
         mTrackList.invalidateViews();
         mParentActivity.updateNowPlaying(getActivity());
     }
-
-    private BroadcastReceiver mTrackListListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            mTrackList.invalidateViews();
-            mParentActivity.updateNowPlaying(getParentActivity());
-        }
-    };
-
-    private BroadcastReceiver mNowPlayingListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (intent.getAction().equals(MediaPlaybackService.META_CHANGED)) {
-                mTrackList.invalidateViews();
-                mParentActivity.updateNowPlaying(getParentActivity());
-            } else if (intent.getAction().equals(
-                    MediaPlaybackService.QUEUE_CHANGED)) {
-                if (mDeletedOneRow) {
-                    // This is the notification for a single row that was
-                    // deleted previously, which is already reflected in
-                    // the UI.
-                    mDeletedOneRow = false;
-                    return;
-                }
-                // The service could disappear while the broadcast was in
-                // flight,
-                // so check to see if it's still valid
-                if (MusicUtils.sService == null) {
-                    mParentActivity.finish();
-                    return;
-                }
-                if (mAdapter != null) {
-                    Cursor c = new NowPlayingCursor(MusicUtils.sService,
-                            mCursorCols);
-                    if (c.getCount() == 0) {
-                        if (mParentActivity.mIsPanelExpanded) {
-                            mParentActivity.getSlidingPanelLayout()
-                                    .setHookState(BoardState.HIDDEN);
-                            mParentActivity.mIsPanelExpanded = false;
-                            mParentActivity.getNowPlayingView().setVisibility(
-                                    View.GONE);
-                        }
-                        return;
-                    }
-                    mAdapter.changeCursor(c);
-                }
-            }
-        }
-    };
 
     private void displayDatabaseError() {
 
@@ -881,9 +865,9 @@ public class TrackBrowserFragment extends Fragment implements
             intent.setClass(getActivity(), ScanningProgress.class);
             getActivity().startActivityForResult(intent, Defs.SCAN_DONE);
         } /*
-           * else if (!TextUtils.equals(mLastSdStatus, status)) { mLastSdStatus
-           * = status; Log.d(TAG, "sd card: " + status); }
-           */
+         * else if (!TextUtils.equals(mLastSdStatus, status)) { mLastSdStatus
+         * = status; Log.d(TAG, "sd card: " + status); }
+         */
 
         // a.setTitle(title);
         // View v = a.findViewById(R.id.sd_message);
@@ -945,129 +929,127 @@ public class TrackBrowserFragment extends Fragment implements
         return ismusic;
     }
 
-
-
     public boolean onContextItemSelected(MenuItem item, int position) {
         switch (item.getItemId()) {
-        case PLAY_SELECTION: {
-            // play the track
-            // int position = mSelectedPosition;
-            MusicUtils.playAll(mParentActivity, mTrackCursor, position);
-            return true;
-        }
-
-        case QUEUE: {
-            long[] list = new long[] { mSelectedId };
-            MusicUtils.addToCurrentPlaylist(mParentActivity, list);
-            MusicUtils.addToPlaylist(mParentActivity, list,
-                    MusicUtils.getPlayListId());
-            return true;
-        }
-
-        case NEW_PLAYLIST: {
-            Intent intent = new Intent();
-            intent.setClass(mParentActivity, CreatePlaylist.class);
-            startActivityForResult(intent, NEW_PLAYLIST);
-            return true;
-        }
-
-        case PLAYLIST_SELECTED: {
-            long[] list = new long[] { mSelectedId };
-            long playlist = item.getIntent().getLongExtra("playlist", 0);
-            MusicUtils.addToPlaylist(mParentActivity, list, playlist);
-            return true;
-        }
-
-        case USE_AS_RINGTONE:
-            // Set the system setting to make this the current ringtone
-            MusicUtils.setRingtone(mParentActivity, mSelectedId);
-            return true;
-
-        case USE_AS_RINGTONE_2:
-            // Set the system setting to make this the current ringtone for
-            // SUB_1
-            MusicUtils.setRingtone(mParentActivity, mSelectedId,
-                    MusicUtils.RINGTONE_SUB_1);
-            return true;
-
-        case DELETE_ITEM: {
-            long[] list = new long[1];
-            list[0] = (int) mSelectedId;
-            Bundle b = new Bundle();
-            String f = getString(R.string.delete_song_desc);
-            String desc = String.format(f, mCurrentTrackName);
-            b.putString("description", desc);
-            b.putLongArray("items", list);
-            Intent intent = new Intent();
-            intent.setClass(mParentActivity, DeleteItems.class);
-            intent.putExtras(b);
-            startActivityForResult(intent, -1);
-            return true;
-        }
-
-        case REMOVE:
-            removePlaylistItem(position);
-            return true;
-
-        case DRM_LICENSE_INFO:
-            String path = MusicUtils.getSelectAudioPath(
-                    mParentActivity.getApplicationContext(), mSelectedId);
-            path = path.replace("/storage/emulated/0",
-                    "/storage/emulated/legacy");
-            Intent intent = new Intent(
-                    "android.drmservice.intent.action.SHOW_PROPERTIES");
-            intent.putExtra("DRM_FILE_PATH", path);
-            intent.putExtra("DRM_TYPE", "OMAV1");
-            Log.d(LOGTAG, "onContextItemSelected:------filepath===" + path);
-            mParentActivity.sendBroadcast(intent);
-            return true;
-
-        case SEARCH:
-            doSearch();
-            return true;
-
-        case DETAILS:
-            showDetails();
-            return true;
-
-        case SHARE:
-            // Send intent to share audio
-            long id;
-            Intent shareIntent = new Intent(Intent.ACTION_SEND);
-            shareIntent.setType("audio/*");
-            mTrackCursor.moveToPosition(position);
-            if (mEditMode
-                    && (mPlaylist != null && !mPlaylist.equals("nowplaying"))) {
-                id = mTrackCursor
-                        .getLong(mTrackCursor
-                                .getColumnIndexOrThrow(MediaStore.Audio.Playlists.Members.AUDIO_ID));
-            } else {
-                id = mTrackCursor.getLong(mTrackCursor
-                        .getColumnIndexOrThrow(MediaStore.Audio.Media._ID));
+            case PLAY_SELECTION: {
+                // play the track
+                // int position = mSelectedPosition;
+                MusicUtils.playAll(mParentActivity, mTrackCursor, position);
+                return true;
             }
-            Uri uri = ContentUris.withAppendedId(
-                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id);
-            boolean canBeShared = true;
-            String filepath = null;
-            String scheme = uri.getScheme();
-            if ("file".equals(scheme)) {
-                filepath = uri.getPath();
-            } else {
-                Cursor cursor = null;
-                try {
-                    cursor = mParentActivity.getContentResolver().query(uri,
-                            new String[] { VideoColumns.DATA }, null, null,
-                            null);
-                    if (cursor != null && cursor.moveToNext()) {
-                        filepath = cursor.getString(0);
-                    }
-                } catch (Throwable t) {
-                    Log.w(LOGTAG, "cannot get path from: " + uri);
-                } finally {
-                    if (cursor != null)
-                        cursor.close();
+
+            case QUEUE: {
+                long[] list = new long[]{mSelectedId};
+                MusicUtils.addToCurrentPlaylist(mParentActivity, list);
+                MusicUtils.addToPlaylist(mParentActivity, list,
+                        MusicUtils.getPlayListId());
+                return true;
+            }
+
+            case NEW_PLAYLIST: {
+                Intent intent = new Intent();
+                intent.setClass(mParentActivity, CreatePlaylist.class);
+                startActivityForResult(intent, NEW_PLAYLIST);
+                return true;
+            }
+
+            case PLAYLIST_SELECTED: {
+                long[] list = new long[]{mSelectedId};
+                long playlist = item.getIntent().getLongExtra("playlist", 0);
+                MusicUtils.addToPlaylist(mParentActivity, list, playlist);
+                return true;
+            }
+
+            case USE_AS_RINGTONE:
+                // Set the system setting to make this the current ringtone
+                MusicUtils.setRingtone(mParentActivity, mSelectedId);
+                return true;
+
+            case USE_AS_RINGTONE_2:
+                // Set the system setting to make this the current ringtone for
+                // SUB_1
+                MusicUtils.setRingtone(mParentActivity, mSelectedId,
+                        MusicUtils.RINGTONE_SUB_1);
+                return true;
+
+            case DELETE_ITEM: {
+                long[] list = new long[1];
+                list[0] = (int) mSelectedId;
+                Bundle b = new Bundle();
+                String f = getString(R.string.delete_song_desc);
+                String desc = String.format(f, mCurrentTrackName);
+                b.putString("description", desc);
+                b.putLongArray("items", list);
+                Intent intent = new Intent();
+                intent.setClass(mParentActivity, DeleteItems.class);
+                intent.putExtras(b);
+                startActivityForResult(intent, -1);
+                return true;
+            }
+
+            case REMOVE:
+                removePlaylistItem(position);
+                return true;
+
+            case DRM_LICENSE_INFO:
+                String path = MusicUtils.getSelectAudioPath(
+                        mParentActivity.getApplicationContext(), mSelectedId);
+                path = path.replace("/storage/emulated/0",
+                        "/storage/emulated/legacy");
+                Intent intent = new Intent(
+                        "android.drmservice.intent.action.SHOW_PROPERTIES");
+                intent.putExtra("DRM_FILE_PATH", path);
+                intent.putExtra("DRM_TYPE", "OMAV1");
+                Log.d(LOGTAG, "onContextItemSelected:------filepath===" + path);
+                mParentActivity.sendBroadcast(intent);
+                return true;
+
+            case SEARCH:
+                doSearch();
+                return true;
+
+            case DETAILS:
+                showDetails();
+                return true;
+
+            case SHARE:
+                // Send intent to share audio
+                long id;
+                Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                shareIntent.setType("audio/*");
+                mTrackCursor.moveToPosition(position);
+                if (mEditMode
+                        && (mPlaylist != null && !mPlaylist.equals("nowplaying"))) {
+                    id = mTrackCursor
+                            .getLong(mTrackCursor
+                                    .getColumnIndexOrThrow(MediaStore.Audio.Playlists.Members.AUDIO_ID));
+                } else {
+                    id = mTrackCursor.getLong(mTrackCursor
+                            .getColumnIndexOrThrow(MediaStore.Audio.Media._ID));
                 }
-            }
+                Uri uri = ContentUris.withAppendedId(
+                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id);
+                boolean canBeShared = true;
+                String filepath = null;
+                String scheme = uri.getScheme();
+                if ("file".equals(scheme)) {
+                    filepath = uri.getPath();
+                } else {
+                    Cursor cursor = null;
+                    try {
+                        cursor = mParentActivity.getContentResolver().query(uri,
+                                new String[]{VideoColumns.DATA}, null, null,
+                                null);
+                        if (cursor != null && cursor.moveToNext()) {
+                            filepath = cursor.getString(0);
+                        }
+                    } catch (Throwable t) {
+                        Log.w(LOGTAG, "cannot get path from: " + uri);
+                    } finally {
+                        if (cursor != null)
+                            cursor.close();
+                    }
+                }
 
 //TODO: DRM changes here.
 //            if (filepath != null
@@ -1094,10 +1076,10 @@ public class TrackBrowserFragment extends Fragment implements
 //                canBeShared = true;
 //            }
 
-            shareIntent.putExtra(Intent.EXTRA_STREAM, uri);
-            if (canBeShared)
-                startActivity(shareIntent);
-            return true;
+                shareIntent.putExtra(Intent.EXTRA_STREAM, uri);
+                if (canBeShared)
+                    startActivity(shareIntent);
+                return true;
         }
         return super.onContextItemSelected(item);
     }
@@ -1121,12 +1103,12 @@ public class TrackBrowserFragment extends Fragment implements
 
     private void fillData(View contentView) {
         // TODO Auto-generated method stub
-        TextView songName = (TextView) contentView.findViewById(R.id.song_name);
-        TextView albumName = (TextView) contentView.findViewById(R.id.album_name);
-        TextView artistName = (TextView) contentView.findViewById(R.id.artist_name);
-        TextView durationName = (TextView) contentView.findViewById(R.id.duration_name);
-        TextView pathName = (TextView) contentView.findViewById(R.id.path_name);
-        TextView sizeName = (TextView) contentView.findViewById(R.id.size_name);
+        TextView songName = contentView.findViewById(R.id.song_name);
+        TextView albumName = contentView.findViewById(R.id.album_name);
+        TextView artistName = contentView.findViewById(R.id.artist_name);
+        TextView durationName = contentView.findViewById(R.id.duration_name);
+        TextView pathName = contentView.findViewById(R.id.path_name);
+        TextView sizeName = contentView.findViewById(R.id.size_name);
         songName.setText(mCurrentTrackName);
         albumName.setText(mCurrentAlbumName);
         artistName.setText(mCurrentArtistNameForAlbum);
@@ -1134,6 +1116,23 @@ public class TrackBrowserFragment extends Fragment implements
         pathName.setText(mCurrentTrackPath);
         sizeName.setText(mCurrentTrackSize);
     }
+
+    // In order to use alt-up/down as a shortcut for moving the selected item
+    // in the list, we need to override dispatchKeyEvent, not onKeyDown.
+    // (onKeyDown never sees these events, since they are handled by the list)
+    /*
+     * @Override public boolean dispatchKeyEvent(KeyEvent event) { int curpos =
+     * mTrackList.getSelectedItemPosition(); if (mPlaylist != null &&
+     * !mPlaylist.equals("recentlyadded") && curpos >= 0 && event.getMetaState()
+     * != 0 && event.getAction() == KeyEvent.ACTION_DOWN) { switch
+     * (event.getKeyCode()) { case KeyEvent.KEYCODE_DPAD_UP: moveItem(true);
+     * return true; case KeyEvent.KEYCODE_DPAD_DOWN: moveItem(false); return
+     * true; case KeyEvent.KEYCODE_DEL: removeItem(); return true; } } else if
+     * (event.getAction() == KeyEvent.ACTION_UP && event.getKeyCode() ==
+     * KeyEvent.KEYCODE_BACK) { finish(); return true; }
+     *
+     * return super.dispatchKeyEvent(event); }
+     */
 
     void doSearch() {
         CharSequence title = null;
@@ -1160,23 +1159,6 @@ public class TrackBrowserFragment extends Fragment implements
 
         startActivity(Intent.createChooser(i, title));
     }
-
-    // In order to use alt-up/down as a shortcut for moving the selected item
-    // in the list, we need to override dispatchKeyEvent, not onKeyDown.
-    // (onKeyDown never sees these events, since they are handled by the list)
-    /*
-     * @Override public boolean dispatchKeyEvent(KeyEvent event) { int curpos =
-     * mTrackList.getSelectedItemPosition(); if (mPlaylist != null &&
-     * !mPlaylist.equals("recentlyadded") && curpos >= 0 && event.getMetaState()
-     * != 0 && event.getAction() == KeyEvent.ACTION_DOWN) { switch
-     * (event.getKeyCode()) { case KeyEvent.KEYCODE_DPAD_UP: moveItem(true);
-     * return true; case KeyEvent.KEYCODE_DPAD_DOWN: moveItem(false); return
-     * true; case KeyEvent.KEYCODE_DEL: removeItem(); return true; } } else if
-     * (event.getAction() == KeyEvent.ACTION_UP && event.getKeyCode() ==
-     * KeyEvent.KEYCODE_BACK) { finish(); return true; }
-     *
-     * return super.dispatchKeyEvent(event); }
-     */
 
     private void removeItem() {
         int curcount = mTrackCursor != null ? mTrackCursor.getCount() : 0;
@@ -1272,9 +1254,9 @@ public class TrackBrowserFragment extends Fragment implements
 
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position,
-            long id) {
+                            long id) {
 
-        ((MediaPlaybackActivity) mParentActivity)
+        mParentActivity
                 .updateNowPlaying(mParentActivity);
         if ((mTrackCursor == null) || (mTrackCursor.getCount() == 0)) {
             return;
@@ -1286,8 +1268,8 @@ public class TrackBrowserFragment extends Fragment implements
                 + songid;
         String path = null;
         String mime = null;
-        final String[] ccols = new String[] { MediaStore.Audio.Media.DATA,
-                MediaStore.Audio.Media.MIME_TYPE };
+        final String[] ccols = new String[]{MediaStore.Audio.Media.DATA,
+                MediaStore.Audio.Media.MIME_TYPE};
         String where = MediaStore.Audio.Media._ID + "='" + songid + "'";
         ContentResolver resolver = mParentActivity.getApplicationContext()
                 .getContentResolver();
@@ -1353,35 +1335,35 @@ public class TrackBrowserFragment extends Fragment implements
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
         switch (requestCode) {
-        case SCAN_DONE:
-            if (resultCode == mParentActivity.RESULT_CANCELED) {
-                mParentActivity.finish();
-            } else {
-                getTrackCursor(mAdapter.getQueryHandler(), null, true);
-            }
-            break;
-
-        case NEW_PLAYLIST:
-            if (resultCode == mParentActivity.RESULT_OK) {
-                Uri uri = intent.getData();
-                if (uri != null) {
-                    long[] list = new long[] { mSelectedId };
-                    MusicUtils.addToPlaylist(mParentActivity, list,
-                            Integer.valueOf(uri.getLastPathSegment()));
+            case SCAN_DONE:
+                if (resultCode == Activity.RESULT_CANCELED) {
+                    mParentActivity.finish();
+                } else {
+                    getTrackCursor(mAdapter.getQueryHandler(), null, true);
                 }
-            }
-            break;
+                break;
 
-        case SAVE_AS_PLAYLIST:
-            if (resultCode == mParentActivity.RESULT_OK) {
-                Uri uri = intent.getData();
-                if (uri != null) {
-                    long[] list = MusicUtils.getSongListForCursor(mTrackCursor);
-                    int plid = Integer.parseInt(uri.getLastPathSegment());
-                    MusicUtils.addToPlaylist(mParentActivity, list, plid);
+            case NEW_PLAYLIST:
+                if (resultCode == Activity.RESULT_OK) {
+                    Uri uri = intent.getData();
+                    if (uri != null) {
+                        long[] list = new long[]{mSelectedId};
+                        MusicUtils.addToPlaylist(mParentActivity, list,
+                                Integer.valueOf(uri.getLastPathSegment()));
+                    }
                 }
-            }
-            break;
+                break;
+
+            case SAVE_AS_PLAYLIST:
+                if (resultCode == Activity.RESULT_OK) {
+                    Uri uri = intent.getData();
+                    if (uri != null) {
+                        long[] list = MusicUtils.getSongListForCursor(mTrackCursor);
+                        int plid = Integer.parseInt(uri.getLastPathSegment());
+                        MusicUtils.addToPlaylist(mParentActivity, list, plid);
+                    }
+                }
+                break;
         }
     }
 
@@ -1419,7 +1401,7 @@ public class TrackBrowserFragment extends Fragment implements
                     // Nothing is playing.
                 }
             } else if (mPlaylist.equals("-1")) {
-                Log.e(LOGTAG, "getTrackCursor failed mPlaylist="+mPlaylist);
+                Log.e(LOGTAG, "getTrackCursor failed mPlaylist=" + mPlaylist);
             } else if (mPlaylist.equals("podcasts")) {
                 where.append(" AND " + MediaStore.Audio.Media.IS_PODCAST + "=1");
                 Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
@@ -1447,7 +1429,7 @@ public class TrackBrowserFragment extends Fragment implements
             } else {
                 if (mPlaylist.equals(FAVORITE_PLAYLIST)) {
                     mPlaylist = String.valueOf(
-                         MusicUtils.idForplaylist(getActivity(), "My Favorite"));
+                            MusicUtils.idForplaylist(getActivity(), "My Favorite"));
                 }
                 Uri uri = MediaStore.Audio.Playlists.Members.getContentUri(
                         "external", Long.valueOf(mPlaylist));
@@ -1504,7 +1486,130 @@ public class TrackBrowserFragment extends Fragment implements
         return ret;
     }
 
+    @Override
+    public void onScrollStateChanged(AbsListView view, int scrollState) {
+        switch (scrollState) {
+            case OnScrollListener.SCROLL_STATE_IDLE:
+                isScrolling = false;
+                int from = view.getFirstVisiblePosition();
+                int to = view.getLastVisiblePosition();
+                Cursor cursor = getTrackCursor(mAdapter.getQueryHandler(), null,
+                        false);
+                new MusicUtils.AlbumBitmapDownloadThread(getParentActivity(),
+                        cursor, handler, from, to).start();
+                break;
+            case OnScrollListener.SCROLL_STATE_TOUCH_SCROLL:
+                isScrolling = true;
+                break;
+            case OnScrollListener.SCROLL_STATE_FLING:
+                isScrolling = true;
+                break;
+        }
+    }
+
+    @Override
+    public void onScroll(AbsListView view, int firstVisibleItem,
+                         int visibleItemCount, int totalItemCount) {
+        // TODO Auto-generated method stub
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration config) {
+        super.onConfigurationChanged(config);
+        if (mPopupMenu != null) {
+            mPopupMenu.dismiss();
+        }
+        if (mSubMenu != null) {
+            mSubMenu.close();
+        }
+        if (mParentActivity.mFragment == null || !mParentActivity.mFragment.isVisible()) {
+            Fragment fragment = new TrackBrowserFragment();
+            fragment.setArguments(getArguments());
+            getFragmentManager().beginTransaction()
+                    .replace(R.id.fragment_page, fragment, "track_fragment")
+                    .commitAllowingStateLoss();
+        }
+    }
+
+    public static class WaveView extends View {
+        private static final float SPACE = 0.5f;
+        private static final float STOP = 11f / 12;
+        private static final int FRAME_DELAY = 10;
+
+        private float[] mBars = new float[4];
+        private float[] mBarsNext = new float[4];
+
+        private boolean mAnimate;
+        private int mFrame;
+
+        private int mWaveColor;
+        private int mWaveColorInactive;
+
+        private Paint mPaint;
+
+        public WaveView(Context context, AttributeSet attrs) {
+            super(context, attrs);
+
+            Resources res = getResources();
+            mWaveColor = res.getColor(R.color.wave_color);
+            mWaveColorInactive = res.getColor(R.color.wave_color_inactive);
+
+            mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        }
+
+        public WaveView(Context context) {
+            this(context, null);
+        }
+
+        public void animate(boolean animate) {
+            mAnimate = animate;
+            mFrame = 0;
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+
+            mPaint.setColor(mAnimate ? mWaveColor : mWaveColorInactive);
+
+            float height = (float) getHeight();
+            float width = height;
+            float all = mBars.length + (mBars.length - 1) * SPACE;
+
+            if (mFrame % FRAME_DELAY == 0) {
+                for (int i = mBarsNext.length - 1; i >= 0; --i) {
+                    mBarsNext[i] = (float) Math.random();
+                }
+            }
+            mFrame++;
+
+            for (int i = mBars.length - 1; i >= 0; --i) {
+                float left = width * i * (1 + SPACE) / all;
+                float right = left + width / all;
+
+                if (mAnimate) {
+                    mBars[i] = (mBars[i] * FRAME_DELAY + mBarsNext[i]) / (FRAME_DELAY + 1);
+                    float top = mBars[i] * height;
+                    canvas.drawRect(left, top, right, height, mPaint);
+                } else {
+                    canvas.drawRect(left, STOP * height, right, height, mPaint);
+                }
+            }
+
+            if (mAnimate) invalidate();
+        }
+    }
+
     private class NowPlayingCursor extends AbstractCursor {
+        private String[] mCols;
+        private Cursor mCurrentPlaylistCursor; // updated in onMove
+        private int mSize; // size of the queue
+        private long[] mNowPlaying;
+        private long[] mCursorIdxs;
+        private int mCurPos;
+        private IMediaPlaybackService mService;
+
         public NowPlayingCursor(IMediaPlaybackService service, String[] cols) {
             mCols = cols;
             mService = service;
@@ -1617,13 +1722,13 @@ public class TrackBrowserFragment extends Fragment implements
                 if (mService.removeTracks(which, which) == 0) {
                     return false; // delete failed
                 }
-                int i = (int) which;
+                int i = which;
                 mSize--;
                 while (i < mSize) {
                     mNowPlaying[i] = mNowPlaying[i + 1];
                     i++;
                 }
-                onMove(-1, (int) mCurPos);
+                onMove(-1, mCurPos);
             } catch (RemoteException ex) {
             }
             return true;
@@ -1730,118 +1835,33 @@ public class TrackBrowserFragment extends Fragment implements
                 mCurrentPlaylistCursor = null;
             }
         }
-
-        private String[] mCols;
-        private Cursor mCurrentPlaylistCursor; // updated in onMove
-        private int mSize; // size of the queue
-        private long[] mNowPlaying;
-        private long[] mCursorIdxs;
-        private int mCurPos;
-        private IMediaPlaybackService mService;
     }
 
     class TrackListAdapter extends android.widget.SimpleCursorAdapter
             implements android.widget.SectionIndexer {
+        private final BitmapDrawable mDefaultAlbumIcon;
+        private final StringBuilder mBuilder = new StringBuilder();
+        private final String mUnknownArtist;
+        private final String mUnknownAlbum;
         boolean mIsNowPlaying;
         boolean mDisableNowPlayingIndicator;
-        private final BitmapDrawable mDefaultAlbumIcon;
-
         int mTitleIdx;
         int mArtistIdx;
         int mDurationIdx;
         int mAudioIdIdx;
         int mAlbumIdx;
         int mDataIdx = -1;
-
-        private final StringBuilder mBuilder = new StringBuilder();
-        private final String mUnknownArtist;
-        private final String mUnknownAlbum;
-
+        HashMap<View, Integer> mPositionMap;
         private AlphabetIndexer mIndexer;
-
         private TrackBrowserFragment mFragment = null;
         private TrackQueryHandler mQueryHandler;
         private String mConstraint = null;
         private boolean mConstraintIsValid = false;
-        HashMap<View, Integer> mPositionMap;
-
-        class ViewHolder {
-            TextView line1;
-            TextView line2;
-            TextView duration;
-            ImageView play_indicator;
-            CharArrayBuffer buffer1;
-            char[] buffer2;
-            ImageView drm_icon;
-            WaveView anim_icon;
-            ImageView icon;
-            String mCurrentTrackName;
-            String mCurrentAlbumName;
-            String mCurrentArtistNameForAlbum;
-            String mCurrentTrackDuration;
-            String mCurrentTrackPath;
-            String mCurrentTrackSize;
-            long mSelectedID;
-            int position = -1;
-        }
-
-        class TrackQueryHandler extends AsyncQueryHandler {
-
-            class QueryArgs {
-                public Uri uri;
-                public String[] projection;
-                public String selection;
-                public String[] selectionArgs;
-                public String orderBy;
-            }
-
-            TrackQueryHandler(ContentResolver res) {
-                super(res);
-            }
-
-            public Cursor doQuery(Uri uri, String[] projection,
-                    String selection, String[] selectionArgs, String orderBy,
-                    boolean async) {
-                if (async) {
-                    // Get 500 results first, which is enough to allow the user
-                    // to start scrolling,
-                    // while still being very fast.
-                    Uri limituri = uri.buildUpon()
-                            .appendQueryParameter("limit", "500").build();
-                    QueryArgs args = new QueryArgs();
-                    args.uri = uri;
-                    args.projection = projection;
-                    args.selection = selection;
-                    args.selectionArgs = selectionArgs;
-                    args.orderBy = orderBy;
-
-                    startQuery(0, args, limituri, projection, selection,
-                            selectionArgs, orderBy);
-                    return null;
-                }
-                return MusicUtils.query(mFragment.getActivity(), uri,
-                        projection, selection, selectionArgs, orderBy);
-            }
-
-            @Override
-            protected void onQueryComplete(int token, Object cookie,
-                    Cursor cursor) {
-                // Log.i("@@@", "query complete: " + cursor.getCount() + "   " +
-                // mActivity);
-                mFragment.init(cursor, cookie != null);
-                if (token == 0 && cookie != null && cursor != null
-                        && !cursor.isClosed() && cursor.getCount() >= 100) {
-                    QueryArgs args = (QueryArgs) cookie;
-                    startQuery(1, null, args.uri, args.projection,
-                            args.selection, args.selectionArgs, args.orderBy);
-                }
-            }
-        }
 
         TrackListAdapter(Context context,
-                TrackBrowserFragment currentaFragment, int layout,
-                Cursor cursor, String[] from, int[] to, boolean isnowplaying,
-                boolean disablenowplayingindicator) {
+                         TrackBrowserFragment currentaFragment, int layout,
+                         Cursor cursor, String[] from, int[] to, boolean isnowplaying,
+                         boolean disablenowplayingindicator) {
             super(context, layout, cursor, from, to);
             mFragment = currentaFragment;
             getColumnIndices(cursor);
@@ -1872,10 +1892,10 @@ public class TrackBrowserFragment extends Fragment implements
                         .getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);
                 mDurationIdx = cursor
                         .getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION);
-                try{
-                mAlbumIdx = cursor
-                        .getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID);
-                }catch(Exception e){
+                try {
+                    mAlbumIdx = cursor
+                            .getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID);
+                } catch (Exception e) {
 
                 }
                 try {
@@ -1911,17 +1931,17 @@ public class TrackBrowserFragment extends Fragment implements
             // iv.setVisibility(View.GONE);
 
             ViewHolder vh = new ViewHolder();
-            vh.line1 = (TextView) v.findViewById(R.id.line1);
-            vh.line2 = (TextView) v.findViewById(R.id.line2);
+            vh.line1 = v.findViewById(R.id.line1);
+            vh.line2 = v.findViewById(R.id.line2);
             // vh.duration = (TextView) v.findViewById(R.id.duration);
-            vh.play_indicator = (ImageView) v.findViewById(R.id.play_indicator);
+            vh.play_indicator = v.findViewById(R.id.play_indicator);
             ((MediaPlaybackActivity) mFragment.getActivity())
                     .setTouchDelegate(vh.play_indicator);
             vh.buffer1 = new CharArrayBuffer(100);
             vh.buffer2 = new char[200];
             // vh.drm_icon = (ImageView) v.findViewById(R.id.drm_icon);
-            vh.anim_icon = (WaveView) v.findViewById(R.id.animView);
-            vh.icon = (ImageView) v.findViewById(R.id.icon);
+            vh.anim_icon = v.findViewById(R.id.animView);
+            vh.icon = v.findViewById(R.id.icon);
 
             v.setTag(vh);
             return v;
@@ -1929,7 +1949,7 @@ public class TrackBrowserFragment extends Fragment implements
 
         @Override
         public void bindView(final View view, Context context,
-                final Cursor cursor) {
+                             final Cursor cursor) {
 
             final ViewHolder vh = (ViewHolder) view.getTag();
             if (!mPositionMap.containsKey(view))
@@ -1947,7 +1967,7 @@ public class TrackBrowserFragment extends Fragment implements
             long aid = cursor.getLong(mAlbumIdx);
             if (MusicUtils.isGroupByFolder() && !mEditMode && mParent != -1) {
                 long l = cursor.getLong(1);
-                if (vh.icon.getTag() != (Integer)vh.icon.getId()) {
+                if (vh.icon.getTag() != (Integer) vh.icon.getId()) {
                     new MusicUtils.FolderBitmapThread(mParentActivity, l,
                             mDefaultAlbumIcon, vh.icon).start();
                     vh.icon.setTag(vh.icon.getId());
@@ -2100,29 +2120,29 @@ public class TrackBrowserFragment extends Fragment implements
             }
         }
 
-        private String getHumanReadableSize(Context context,int size) {
+        private String getHumanReadableSize(Context context, int size) {
             // TODO Auto-generated method stub
             Resources res = context.getResources();
             final int[] magnitude = {
-                                     R.string.size_bytes,
-                                     R.string.size_kilobytes,
-                                     R.string.size_megabytes,
-                                     R.string.size_gigabytes
-                                    };
+                    R.string.size_bytes,
+                    R.string.size_kilobytes,
+                    R.string.size_megabytes,
+                    R.string.size_gigabytes
+            };
 
             double aux = size;
             int cc = magnitude.length;
             for (int i = 0; i < cc; i++) {
                 if (aux < 1024) {
                     double cleanSize = Math.round(aux * 100);
-                    return Double.toString(cleanSize / 100) +
+                    return cleanSize / 100 +
                             " " + res.getString(magnitude[i]); //$NON-NLS-1$
                 } else {
                     aux = aux / 1024;
                 }
             }
             double cleanSize = Math.round(aux * 100);
-            return Double.toString(cleanSize / 100) +
+            return cleanSize / 100 +
                     " " + res.getString(magnitude[cc - 1]); //$NON-NLS-1$
         }
 
@@ -2138,7 +2158,7 @@ public class TrackBrowserFragment extends Fragment implements
                     mFragment.mTrackCursor = null;
                 }
                 mFragment.mTrackCursor = cursor;
-                if ((cursor != null && !cursor.isClosed()) || cursor == null) {
+                if (cursor == null || !cursor.isClosed()) {
                     super.changeCursor(cursor);
                     getColumnIndices(cursor);
                 }
@@ -2150,7 +2170,7 @@ public class TrackBrowserFragment extends Fragment implements
             String s = constraint.toString();
             if (mConstraintIsValid
                     && ((s == null && mConstraint == null) || (s != null && s
-                            .equals(mConstraint)))) {
+                    .equals(mConstraint)))) {
                 return getCursor();
             }
             Cursor c = mFragment.getTrackCursor(mQueryHandler, s, false);
@@ -2164,7 +2184,7 @@ public class TrackBrowserFragment extends Fragment implements
             if (mIndexer != null) {
                 return mIndexer.getSections();
             } else {
-                return new String[] { " " };
+                return new String[]{" "};
             }
         }
 
@@ -2178,128 +2198,78 @@ public class TrackBrowserFragment extends Fragment implements
         public int getSectionForPosition(int position) {
             return 0;
         }
-    }
 
-    Handler handler = new Handler() {
-        public void handleMessage(Message msg) {
-            if (mAdapter != null) {
-                mAdapter.notifyDataSetChanged();
+        class ViewHolder {
+            TextView line1;
+            TextView line2;
+            TextView duration;
+            ImageView play_indicator;
+            CharArrayBuffer buffer1;
+            char[] buffer2;
+            ImageView drm_icon;
+            WaveView anim_icon;
+            ImageView icon;
+            String mCurrentTrackName;
+            String mCurrentAlbumName;
+            String mCurrentArtistNameForAlbum;
+            String mCurrentTrackDuration;
+            String mCurrentTrackPath;
+            String mCurrentTrackSize;
+            long mSelectedID;
+            int position = -1;
+        }
+
+        class TrackQueryHandler extends AsyncQueryHandler {
+
+            TrackQueryHandler(ContentResolver res) {
+                super(res);
             }
-        };
-    };
 
-    @Override
-    public void onScrollStateChanged(AbsListView view, int scrollState) {
-        switch (scrollState) {
-        case OnScrollListener.SCROLL_STATE_IDLE:
-            isScrolling = false;
-            int from = view.getFirstVisiblePosition();
-            int to = view.getLastVisiblePosition();
-            Cursor cursor = getTrackCursor(mAdapter.getQueryHandler(), null,
-                    false);
-            new MusicUtils.AlbumBitmapDownloadThread(getParentActivity(),
-                    cursor, handler, from, to).start();
-            break;
-        case OnScrollListener.SCROLL_STATE_TOUCH_SCROLL:
-            isScrolling = true;
-            break;
-        case OnScrollListener.SCROLL_STATE_FLING:
-            isScrolling = true;
-            break;
-        }
-    }
+            public Cursor doQuery(Uri uri, String[] projection,
+                                  String selection, String[] selectionArgs, String orderBy,
+                                  boolean async) {
+                if (async) {
+                    // Get 500 results first, which is enough to allow the user
+                    // to start scrolling,
+                    // while still being very fast.
+                    Uri limituri = uri.buildUpon()
+                            .appendQueryParameter("limit", "500").build();
+                    QueryArgs args = new QueryArgs();
+                    args.uri = uri;
+                    args.projection = projection;
+                    args.selection = selection;
+                    args.selectionArgs = selectionArgs;
+                    args.orderBy = orderBy;
 
-    @Override
-    public void onScroll(AbsListView view, int firstVisibleItem,
-            int visibleItemCount, int totalItemCount) {
-        // TODO Auto-generated method stub
-    }
-
-    public static class WaveView extends View {
-        private static final float SPACE = 0.5f;
-        private static final float STOP = 11f / 12;
-        private static final int FRAME_DELAY = 10;
-
-        private float mBars[] = new float[4];
-        private float mBarsNext[] = new float[4];
-
-        private boolean mAnimate;
-        private int mFrame;
-
-        private int mWaveColor;
-        private int mWaveColorInactive;
-
-        private Paint mPaint;
-
-        public WaveView(Context context, AttributeSet attrs) {
-            super(context, attrs);
-
-            Resources res = getResources();
-            mWaveColor = res.getColor(R.color.wave_color);
-            mWaveColorInactive = res.getColor(R.color.wave_color_inactive);
-
-            mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        }
-
-        public WaveView(Context context) {
-            this(context, null);
-        }
-
-        public void animate(boolean animate) {
-            mAnimate = animate;
-            mFrame = 0;
-            invalidate();
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-
-            mPaint.setColor(mAnimate ? mWaveColor : mWaveColorInactive);
-
-            float height = (float) getHeight();
-            float width = height;
-            float all = mBars.length + (mBars.length - 1) * SPACE;
-
-            if (mFrame % FRAME_DELAY == 0) {
-                for (int i = mBarsNext.length - 1; i >= 0; --i) {
-                    mBarsNext[i] = (float) Math.random();
+                    startQuery(0, args, limituri, projection, selection,
+                            selectionArgs, orderBy);
+                    return null;
                 }
+                return MusicUtils.query(mFragment.getActivity(), uri,
+                        projection, selection, selectionArgs, orderBy);
             }
-            mFrame++;
 
-            for (int i = mBars.length - 1; i >= 0 ; --i) {
-                float left = width * i * (1 + SPACE) / all;
-                float right = left + width / all;
-
-                if (mAnimate) {
-                    mBars[i] = (mBars[i] * FRAME_DELAY + mBarsNext[i]) / (FRAME_DELAY + 1);
-                    float top = mBars[i] * height;
-                    canvas.drawRect(left, top, right, height, mPaint);
-                } else {
-                    canvas.drawRect(left, STOP * height, right, height, mPaint);
+            @Override
+            protected void onQueryComplete(int token, Object cookie,
+                                           Cursor cursor) {
+                // Log.i("@@@", "query complete: " + cursor.getCount() + "   " +
+                // mActivity);
+                mFragment.init(cursor, cookie != null);
+                if (token == 0 && cookie != null && cursor != null
+                        && !cursor.isClosed() && cursor.getCount() >= 100) {
+                    QueryArgs args = (QueryArgs) cookie;
+                    startQuery(1, null, args.uri, args.projection,
+                            args.selection, args.selectionArgs, args.orderBy);
                 }
             }
 
-            if (mAnimate) invalidate();
-        }
-    }
-
-    @Override
-    public void onConfigurationChanged(Configuration config) {
-        super.onConfigurationChanged(config);
-        if (mPopupMenu != null) {
-            mPopupMenu.dismiss();
-        }
-        if (mSubMenu != null) {
-            mSubMenu.close();
-        }
-        if (mParentActivity.mFragment == null || !mParentActivity.mFragment.isVisible()) {
-            Fragment fragment = new TrackBrowserFragment();
-            fragment.setArguments(getArguments());
-            getFragmentManager().beginTransaction()
-                    .replace(R.id.fragment_page, fragment, "track_fragment")
-                    .commitAllowingStateLoss();
+            class QueryArgs {
+                public Uri uri;
+                public String[] projection;
+                public String selection;
+                public String[] selectionArgs;
+                public String orderBy;
+            }
         }
     }
 }

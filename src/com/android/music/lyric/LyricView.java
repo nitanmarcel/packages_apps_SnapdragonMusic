@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.codeaurora.music.lyric;
+package com.android.music.lyric;
 
 import android.content.Context;
 import android.graphics.Canvas;

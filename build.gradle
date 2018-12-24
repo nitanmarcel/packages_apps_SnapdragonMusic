@@ -47,11 +47,8 @@ android {
     sourceSets {
         main {
             res.srcDirs = ['res']
-            java.srcDirs = [
-                    'src/com/android',
-                    'src/com/codeaurora'
-            ]
-            aidl.srcDirs = ['src/com/android/music']
+            java.srcDirs = ['src']
+            aidl.srcDirs = ['src']
             manifest.srcFile 'AndroidManifest.xml'
         }
     }

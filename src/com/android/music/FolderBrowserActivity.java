@@ -68,23 +68,58 @@ import android.widget.SimpleCursorAdapter;
 import android.widget.TextView;
 
 import com.android.music.MusicUtils.ServiceToken;
-import com.android.music.SysApplication;
 
 public class FolderBrowserActivity extends ListActivity
-        implements View.OnCreateContextMenuListener, MusicUtils.Defs, ServiceConnection
-{
+        implements View.OnCreateContextMenuListener, MusicUtils.Defs, ServiceConnection {
+    private static int mLastListPosCourse = -1;
+    private static int mLastListPosFine = -1;
     private String mCurretParent;
     private String mCurrentPath;
     private FolderListAdapter mAdapter;
     private boolean mAdapterSent;
-    private static int mLastListPosCourse = -1;
-    private static int mLastListPosFine = -1;
     private ServiceToken mToken;
     private Cursor mFilesCursor;
+    private BroadcastReceiver mTrackListListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            getListView().invalidateViews();
+            MusicUtils.updateNowPlaying(FolderBrowserActivity.this, false);
+        }
+    };
+    private Handler mReScanHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            if (mAdapter != null) {
+                getFolderCursor(mAdapter.getQueryHandler(), null);
+            }
+        }
+    };
+    private BroadcastReceiver mScanListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            MusicUtils.setSpinnerState(FolderBrowserActivity.this);
+            mReScanHandler.sendEmptyMessage(0);
+            if (intent.getAction().equals(Intent.ACTION_MEDIA_UNMOUNTED)) {
+                MusicUtils.clearAlbumArtCache();
+            }
+        }
+    };
+
+    public static String getRootPath(String path) {
+        if (path != null) {
+            String root = "";
+            int pos = path.lastIndexOf("/");
+            if (pos >= 0) {
+                root = path.substring(0, pos);
+            }
+            return root;
+        } else {
+            return "";
+        }
+    }
 
     @Override
-    public void onCreate(Bundle icicle)
-    {
+    public void onCreate(Bundle icicle) {
         if (icicle != null) {
             mCurretParent = icicle.getString("selectedParent");
         }
@@ -115,8 +150,8 @@ public class FolderBrowserActivity extends ListActivity
                     this,
                     R.layout.track_list_item,
                     mFilesCursor,
-                    new String[] {},
-                    new int[] {});
+                    new String[]{},
+                    new int[]{});
             setListAdapter(mAdapter);
             setTitle(R.string.working_folders);
             getFolderCursor(mAdapter.getQueryHandler(), null);
@@ -178,33 +213,6 @@ public class FolderBrowserActivity extends ListActivity
 
         MusicUtils.setSpinnerState(this);
     }
-
-    private BroadcastReceiver mTrackListListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            getListView().invalidateViews();
-            MusicUtils.updateNowPlaying(FolderBrowserActivity.this, false);
-        }
-    };
-    private BroadcastReceiver mScanListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            MusicUtils.setSpinnerState(FolderBrowserActivity.this);
-            mReScanHandler.sendEmptyMessage(0);
-            if (intent.getAction().equals(Intent.ACTION_MEDIA_UNMOUNTED)) {
-                MusicUtils.clearAlbumArtCache();
-            }
-        }
-    };
-
-    private Handler mReScanHandler = new Handler() {
-        @Override
-        public void handleMessage(Message msg) {
-            if (mAdapter != null) {
-                getFolderCursor(mAdapter.getQueryHandler(), null);
-            }
-        }
-    };
 
     @Override
     public void onPause() {
@@ -370,8 +378,8 @@ public class FolderBrowserActivity extends ListActivity
                 break;
             case SHUFFLE_ALL:
                 cursor = MusicUtils.query(this, MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                        new String[] {
-                            MediaStore.Audio.Media._ID
+                        new String[]{
+                                MediaStore.Audio.Media._ID
                         },
                         MediaStore.Audio.Media.IS_MUSIC + "=1", null,
                         MediaStore.Audio.Media.DEFAULT_SORT_ORDER);
@@ -396,55 +404,32 @@ public class FolderBrowserActivity extends ListActivity
         return ret;
     }
 
-    public static String getRootPath(String path) {
-        if (path != null) {
-            String root = "";
-            int pos = path.lastIndexOf("/");
-            if (pos >= 0) {
-                root = path.substring(0, pos);
-            }
-            return root;
-        } else {
-            return "";
-        }
+    public void onServiceConnected(ComponentName name, IBinder service) {
+        MusicUtils.updateNowPlaying(this, false);
+    }
+
+    public void onServiceDisconnected(ComponentName name) {
+        finish();
     }
 
     static class FolderListAdapter extends SimpleCursorAdapter implements SectionIndexer {
 
-        private Drawable mNowPlaying;
         private final BitmapDrawable mDefaultAlbumIcon;
-        private int mDataIdx;
-        private int mCountIdx;
         private final Resources mResources;
         private final String mUnknownPath;
         private final String mUnknownCount;
+        private final Object[] mFormatArgs = new Object[1];
+        private Drawable mNowPlaying;
+        private int mDataIdx;
+        private int mCountIdx;
         private AlphabetIndexer mIndexer;
         private FolderBrowserActivity mActivity;
         private AsyncQueryHandler mQueryHandler;
         private String mConstraint = null;
         private boolean mConstraintIsValid = false;
-        private final Object[] mFormatArgs = new Object[1];
-
-        static class ViewHolder {
-            TextView line1;
-            TextView line2;
-            ImageView play_indicator;
-            ImageView icon;
-        }
-
-        class QueryHandler extends AsyncQueryHandler {
-            QueryHandler(ContentResolver res) {
-                super(res);
-            }
-
-            @Override
-            protected void onQueryComplete(int token, Object cookie, Cursor cursor) {
-                mActivity.init(cursor);
-            }
-        }
 
         FolderListAdapter(Context context, FolderBrowserActivity currentactivity,
-                int layout, Cursor cursor, String[] from, int[] to) {
+                          int layout, Cursor cursor, String[] from, int[] to) {
             super(context, layout, cursor, from, to);
 
             mActivity = currentactivity;
@@ -486,10 +471,10 @@ public class FolderBrowserActivity extends ListActivity
         public View newView(Context context, Cursor cursor, ViewGroup parent) {
             View v = super.newView(context, cursor, parent);
             ViewHolder vh = new ViewHolder();
-            vh.line1 = (TextView) v.findViewById(R.id.line1);
-            vh.line2 = (TextView) v.findViewById(R.id.line2);
-            vh.play_indicator = (ImageView) v.findViewById(R.id.play_indicator);
-            vh.icon = (ImageView) v.findViewById(R.id.icon);
+            vh.line1 = v.findViewById(R.id.line1);
+            vh.line2 = v.findViewById(R.id.line2);
+            vh.play_indicator = v.findViewById(R.id.play_indicator);
+            vh.icon = v.findViewById(R.id.icon);
             vh.icon.setBackgroundDrawable(mDefaultAlbumIcon);
             vh.icon.setPadding(0, 0, 1, 0);
             v.setTag(vh);
@@ -560,7 +545,7 @@ public class FolderBrowserActivity extends ListActivity
             String s = constraint.toString();
             if (mConstraintIsValid && (
                     (s == null && mConstraint == null) ||
-                    (s != null && s.equals(mConstraint)))) {
+                            (s != null && s.equals(mConstraint)))) {
                 return getCursor();
             }
             Cursor c = mActivity.getFolderCursor(null, s);
@@ -580,13 +565,23 @@ public class FolderBrowserActivity extends ListActivity
         public int getSectionForPosition(int position) {
             return 0;
         }
-    }
 
-    public void onServiceConnected(ComponentName name, IBinder service) {
-        MusicUtils.updateNowPlaying(this, false);
-    }
+        static class ViewHolder {
+            TextView line1;
+            TextView line2;
+            ImageView play_indicator;
+            ImageView icon;
+        }
 
-    public void onServiceDisconnected(ComponentName name) {
-        finish();
+        class QueryHandler extends AsyncQueryHandler {
+            QueryHandler(ContentResolver res) {
+                super(res);
+            }
+
+            @Override
+            protected void onQueryComplete(int token, Object cookie, Cursor cursor) {
+                mActivity.init(cursor);
+            }
+        }
     }
 }

@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
+<?xml version="1.0" encoding="utf-8"?><!--
   Copyright (c) 2016, The Linux Foundation. All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -28,10 +27,9 @@
   IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -->
 
-<inset
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/ic_material_home_as_up_arrow"
-    android:insetRight="24dp"
+    android:insetLeft="24dp"
     android:insetTop="16dp"
-    android:insetBottom="16dp"
-    android:insetLeft="24dp"/>
+    android:insetRight="24dp"
+    android:insetBottom="16dp" />

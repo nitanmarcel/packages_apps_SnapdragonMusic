@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.codeaurora.music.lyric;
+package com.android.music.lyric;
 
 import android.content.Context;
 import android.os.RemoteException;
@@ -50,6 +50,25 @@ public class LyricAdapter extends BaseAdapter {
     private int mSelection = -1;
     private int mCurrentSelection = -1;
     private Context mContext = null;
+    private View.OnClickListener mClickListener = new View.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+            Sentence sentence = (Sentence) v.getTag();
+            if (sentence != null) {
+                if (mContext instanceof MediaPlaybackActivity) {
+                    IMediaPlaybackService service =
+                            ((MediaPlaybackActivity) mContext).getService();
+                    try {
+                        if (service != null) {
+                            service.seek(sentence.getFromTime());
+                        }
+                    } catch (RemoteException e) {
+                    }
+                }
+                mShouldInvalidate = true;
+            }
+        }
+    };
 
     public LyricAdapter(Context context) {
         mContext = context;
@@ -87,8 +106,8 @@ public class LyricAdapter extends BaseAdapter {
             convertView = LayoutInflater.from(mContext).inflate(R.layout.item_lyric, null);
             viewHolder = new ViewHolder();
             viewHolder.mSentenceTv =
-                    (Button) convertView.findViewById(R.id.btn_focused_lyric_sentence);
-            viewHolder.mSentenceBtn = (Button) convertView.findViewById(R.id.btn_lyric_sentence);
+                    convertView.findViewById(R.id.btn_focused_lyric_sentence);
+            viewHolder.mSentenceBtn = convertView.findViewById(R.id.btn_lyric_sentence);
             viewHolder.mSentenceBtn.setOnClickListener(mClickListener);
             convertView.setTag(viewHolder);
         } else {
@@ -131,11 +150,6 @@ public class LyricAdapter extends BaseAdapter {
         }
     }
 
-    static class ViewHolder {
-        Button mSentenceTv;
-        Button mSentenceBtn;
-    }
-
     public int getSelection() {
         return mSelection;
     }
@@ -143,26 +157,6 @@ public class LyricAdapter extends BaseAdapter {
     public void release() {
         mSentences = null;
     }
-
-    private View.OnClickListener mClickListener = new View.OnClickListener() {
-        @Override
-        public void onClick(View v) {
-            Sentence sentence = (Sentence) v.getTag();
-            if (sentence != null) {
-                if (mContext instanceof MediaPlaybackActivity) {
-                    IMediaPlaybackService service =
-                            ((MediaPlaybackActivity) mContext).getService();
-                    try {
-                        if (service != null) {
-                            service.seek(sentence.getFromTime());
-                        }
-                    } catch (RemoteException e) {
-                    }
-                }
-                mShouldInvalidate = true;
-            }
-        }
-    };
 
     public void setInvalidate() {
         mShouldInvalidate = true;
@@ -180,5 +174,10 @@ public class LyricAdapter extends BaseAdapter {
 
     public void invalidateComplete() {
         mShouldInvalidate = false;
+    }
+
+    static class ViewHolder {
+        Button mSentenceTv;
+        Button mSentenceBtn;
     }
 }

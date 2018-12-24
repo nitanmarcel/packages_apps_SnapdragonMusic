@@ -19,10 +19,6 @@
 
 package com.android.music;
 
-import java.text.Collator;
-import java.util.ArrayList;
-import java.util.HashMap;
-
 import android.app.Activity;
 import android.app.Fragment;
 import android.content.AsyncQueryHandler;
@@ -76,8 +72,13 @@ import android.widget.Toolbar;
 import com.android.music.MusicUtils.Defs;
 import com.android.music.MusicUtils.ServiceToken;
 
+import java.text.Collator;
+import java.util.ArrayList;
+
 public class PlaylistBrowserFragment extends Fragment implements
         View.OnCreateContextMenuListener, MusicUtils.Defs {
+    static final LruCache<Integer, Bitmap[]> playlistMap = new LruCache<Integer, Bitmap[]>(
+            20);
     private final String TAG = "PlaylistBrowserFragment";
     private final int DELETE_PLAYLIST = CHILD_MENU_BASE + 1;
     private final int EDIT_PLAYLIST = CHILD_MENU_BASE + 2;
@@ -90,6 +91,9 @@ public class PlaylistBrowserFragment extends Fragment implements
     private final long ALL_SONGS_PLAYLIST = -2;
     private final long PODCASTS_PLAYLIST = -3;
     private final long FAVORITE_PLAYLIST = -100;
+    public PopupMenu mPopupMenu;
+    String[] mCols = new String[]{MediaStore.Audio.Playlists._ID,
+            MediaStore.Audio.Playlists.NAME};
     private PlaylistListAdapter mAdapter;
     private boolean mAdapterSent;
     private int mLastListPosCourse = -1;
@@ -106,11 +110,105 @@ public class PlaylistBrowserFragment extends Fragment implements
     private String[] mPlaylistMemberCols1;
     private Toolbar mToolbar;
     private int mPlaylistId;
-    public PopupMenu mPopupMenu;
-    static final LruCache<Integer, Bitmap[]> playlistMap = new LruCache<Integer, Bitmap[]>(
-            20);
+    private BroadcastReceiver mTrackListListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            mGridView.invalidateViews();
+            parentActivity
+                    .updateNowPlaying(getParentActivity());
+        }
+    };
+    private Handler mReScanHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            if (mAdapter != null) {
+                getPlaylistCursor(mAdapter.getQueryHandler(), null);
+            }
+        }
+    };
+    private BroadcastReceiver mScanListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            MusicUtils.setSpinnerState(parentActivity);
+            mReScanHandler.sendEmptyMessage(0);
+        }
+    };
+    private Cursor mPlaylistCursor;
 
     public PlaylistBrowserFragment() {
+    }
+
+    public static String getMediaPath(final Context context, final Uri uri) {
+
+        // DocumentProvider
+        if (DocumentsContract.isDocumentUri(context, uri)) {
+
+            // MediaProvider
+            if (isMediaDocument(uri)) {
+                final String docId = DocumentsContract.getDocumentId(uri);
+                final String[] split = docId.split(":");
+                final String type = split[0];
+
+                Uri contentUri = null;
+                if ("audio".equals(type)) {
+                    contentUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+                }
+
+                final String selection = "_id=?";
+                final String[] selectionArgs = new String[]{
+                        split[1]
+                };
+
+                return getDataColumn(context, contentUri, selection, selectionArgs);
+            }
+        }
+        // MediaStore (and general)
+        else if ("content".equalsIgnoreCase(uri.getScheme())) {
+            return getDataColumn(context, uri, null, null);
+        }
+        // File
+        else if ("file".equalsIgnoreCase(uri.getScheme())) {
+            return uri.getPath();
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the value of the data column for this Uri. This is useful for MediaStore Uris, and other
+     * file-based ContentProviders.
+     *
+     * @param context       The context.
+     * @param uri           The Uri to query.
+     * @param selection     (Optional) Filter used in the query.
+     * @param selectionArgs (Optional) Selection arguments used in the query.
+     * @return The value of the _data column, which is typically a file path.
+     */
+    public static String getDataColumn(Context context, Uri uri, String selection,
+                                       String[] selectionArgs) {
+
+        Cursor cursor = null;
+        final String column = "_data";
+        final String[] projection = {
+                column
+        };
+
+        try {
+            cursor = context.getContentResolver().query(uri, projection, selection, selectionArgs,
+                    null);
+            if (cursor != null && cursor.moveToFirst()) {
+                final int column_index = cursor.getColumnIndexOrThrow(column);
+                return cursor.getString(column_index);
+            }
+        } finally {
+            if (cursor != null)
+                cursor.close();
+        }
+        return null;
+    }
+
+    public static boolean isMediaDocument(Uri uri) {
+        return "com.android.providers.media.documents".equals(uri.getAuthority());
     }
 
     public Activity getParentActivity() {
@@ -123,7 +221,9 @@ public class PlaylistBrowserFragment extends Fragment implements
         parentActivity = (MediaPlaybackActivity) activity;
     }
 
-    /** Called when the activity is first created. */
+    /**
+     * Called when the activity is first created.
+     */
     @Override
     public void onCreate(Bundle icicle) {
         super.onCreate(icicle);
@@ -133,15 +233,15 @@ public class PlaylistBrowserFragment extends Fragment implements
         if (getArguments() != null) {
             mCreateShortcut = getArguments().getBoolean("isFromShortcut");
         }
-        mPlaylistMemberCols = new String[] {
+        mPlaylistMemberCols = new String[]{
                 MediaStore.Audio.Playlists.Members._ID,
-                MediaStore.Audio.Media.ARTIST };
-        mPlaylistMemberCols1 = new String[] { MediaStore.Audio.Media.ALBUM_ID };
+                MediaStore.Audio.Media.ARTIST};
+        mPlaylistMemberCols1 = new String[]{MediaStore.Audio.Media.ALBUM_ID};
         parentActivity.setVolumeControlStream(AudioManager.STREAM_MUSIC);
         mToken = MusicUtils.bindToService(parentActivity,
                 new ServiceConnection() {
                     public void onServiceConnected(ComponentName classname,
-                            IBinder obj) {
+                                                   IBinder obj) {
                         if (Intent.ACTION_VIEW.equals(action)) {
                             Bundle b = intent.getExtras();
                             if (b == null) {
@@ -177,7 +277,7 @@ public class PlaylistBrowserFragment extends Fragment implements
                             parentActivity.finish();
                             return;
                         }
-                        ((MediaPlaybackActivity) parentActivity)
+                        parentActivity
                                 .updateNowPlaying(getParentActivity());
                     }
 
@@ -225,21 +325,21 @@ public class PlaylistBrowserFragment extends Fragment implements
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
-            Bundle savedInstanceState) {
+                             Bundle savedInstanceState) {
 
         View rootView = inflater.inflate(R.layout.media_picker_fragment_album,
                 container, false);
-        sdErrorMessageView = (TextView) rootView.findViewById(R.id.sd_message);
+        sdErrorMessageView = rootView.findViewById(R.id.sd_message);
         sdErrorMessageIcon = rootView.findViewById(R.id.sd_icon);
-        mToolbar = (Toolbar) parentActivity.findViewById(R.id.music_tool_bar);
-        mGridView = (GridView) rootView.findViewById(R.id.album_list);
+        mToolbar = parentActivity.findViewById(R.id.music_tool_bar);
+        mGridView = rootView.findViewById(R.id.album_list);
         mGridView.setTextFilterEnabled(true);
         arrangeGridColums(parentActivity.getResources().getConfiguration());
         mGridView.setOnItemClickListener(new OnItemClickListener() {
 
             @Override
             public void onItemClick(AdapterView<?> parent, View view,
-                    int position, long id) {
+                                    int position, long id) {
                 com.android.music.PlaylistBrowserFragment.PlaylistListAdapter.ViewHolder vh = (com.android.music.PlaylistBrowserFragment.PlaylistListAdapter.ViewHolder) view
                         .getTag();
                 mToolbar.setTitle(vh.tv.getText().toString());
@@ -264,7 +364,7 @@ public class PlaylistBrowserFragment extends Fragment implements
                                             parentActivity,
                                             R.drawable.ic_launcher_shortcut_music_playlist));
 
-                    parentActivity.setResult(parentActivity.RESULT_OK, intent);
+                    parentActivity.setResult(Activity.RESULT_OK, intent);
                     parentActivity.finish();
                     return;
                 }
@@ -308,8 +408,8 @@ public class PlaylistBrowserFragment extends Fragment implements
         if (mAdapter == null) {
             mAdapter = new PlaylistListAdapter(parentActivity.getApplication(),
                     this, R.layout.track_list_common_playlist, mPlaylistCursor,
-                    new String[] { MediaStore.Audio.Playlists.NAME },
-                    new int[] { android.R.id.text1 });
+                    new String[]{MediaStore.Audio.Playlists.NAME},
+                    new int[]{android.R.id.text1});
             mGridView.setAdapter(mAdapter);
             getPlaylistCursor(mAdapter.getQueryHandler(), null);
         } else {
@@ -333,7 +433,7 @@ public class PlaylistBrowserFragment extends Fragment implements
 
     @Override
     public void onDestroy() {
-        if (mPopupMenu != null ) {
+        if (mPopupMenu != null) {
             mPopupMenu.dismiss();
         }
         if (mGridView != null) {
@@ -385,31 +485,6 @@ public class PlaylistBrowserFragment extends Fragment implements
         mReScanHandler.removeCallbacksAndMessages(null);
         super.onPause();
     }
-
-    private BroadcastReceiver mTrackListListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            mGridView.invalidateViews();
-            ((MediaPlaybackActivity) parentActivity)
-                    .updateNowPlaying(getParentActivity());
-        }
-    };
-    private BroadcastReceiver mScanListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            MusicUtils.setSpinnerState(parentActivity);
-            mReScanHandler.sendEmptyMessage(0);
-        }
-    };
-
-    private Handler mReScanHandler = new Handler() {
-        @Override
-        public void handleMessage(Message msg) {
-            if (mAdapter != null) {
-                getPlaylistCursor(mAdapter.getQueryHandler(), null);
-            }
-        }
-    };
 
     public void init(Cursor cursor) {
 
@@ -494,7 +569,7 @@ public class PlaylistBrowserFragment extends Fragment implements
     }
 
     public void onCreateContextMenu(ContextMenu menu, View view,
-            ContextMenuInfo menuInfoIn) {
+                                    ContextMenuInfo menuInfoIn) {
         if (mCreateShortcut) {
             return;
         }
@@ -525,70 +600,70 @@ public class PlaylistBrowserFragment extends Fragment implements
     public boolean onContextItemSelected(MenuItem item, int id) {
         Intent intent = new Intent();
         switch (item.getItemId()) {
-        case PLAY_SELECTION:
-            if (id == RECENTLY_ADDED_PLAYLIST) {
-                playRecentlyAdded();
-            } else if (id == PODCASTS_PLAYLIST) {
-                playPodcasts();
-            } else if (id == ALL_SONGS_PLAYLIST) {
-                long[] list = MusicUtils
-                        .getAllSongs(parentActivity);
-                if (list != null) {
-                    MusicUtils.playAll(parentActivity,
-                            list, 0);
-                } else {
-                    Toast.makeText(parentActivity,
-                            R.string.list_empty,
-                            Toast.LENGTH_SHORT).show();
-                }
-            } else {
-                if(id==FAVORITE_PLAYLIST){
-                    id = MusicUtils.idForplaylist(getActivity(), "My Favorite");
+            case PLAY_SELECTION:
+                if (id == RECENTLY_ADDED_PLAYLIST) {
+                    playRecentlyAdded();
+                } else if (id == PODCASTS_PLAYLIST) {
+                    playPodcasts();
+                } else if (id == ALL_SONGS_PLAYLIST) {
+                    long[] list = MusicUtils
+                            .getAllSongs(parentActivity);
+                    if (list != null) {
+                        MusicUtils.playAll(parentActivity,
+                                list, 0);
+                    } else {
+                        Toast.makeText(parentActivity,
+                                R.string.list_empty,
+                                Toast.LENGTH_SHORT).show();
                     }
-                MusicUtils.playPlaylist(parentActivity, id);
-            }
-            break;
-        case DELETE_PLAYLIST:
-            // it may not convenient to users when delete new or exist
-            // playlist without any notification.
-            // show a dialog to confirm deleting this playlist.
-            // get playlist name
-            if ("My recordings".equals(mTitle)) {
-                mTitle = this.getResources().getString(
-                        R.string.audio_db_playlist_name);
-            }
-            String desc = getString(R.string.delete_playlist_message, mTitle);
-            Uri uri = ContentUris.withAppendedId(
-                    MediaStore.Audio.Playlists.EXTERNAL_CONTENT_URI, id);
-            Bundle b = new Bundle();
-            b.putString("description", desc);
-            b.putParcelable("Playlist", uri);
-            intent.setClass(parentActivity, DeleteItems.class);
-            intent.putExtras(b);
-            startActivityForResult(intent, -1);
-            break;
-        case EDIT_PLAYLIST:
-            if (id == RECENTLY_ADDED_PLAYLIST) {
-                intent.setClass(parentActivity, WeekSelector.class);
-                startActivityForResult(intent, CHANGE_WEEKS);
-                return true;
-            } else {
-                Log.e(TAG, "should not be here");
-            }
-            break;
-        case RENAME_PLAYLIST:
-            intent.setClass(parentActivity, RenamePlaylist.class);
-            intent.putExtra("rename", Long.valueOf(id));
-            startActivityForResult(intent, RENAME_PLAYLIST);
-            break;
+                } else {
+                    if (id == FAVORITE_PLAYLIST) {
+                        id = MusicUtils.idForplaylist(getActivity(), "My Favorite");
+                    }
+                    MusicUtils.playPlaylist(parentActivity, id);
+                }
+                break;
+            case DELETE_PLAYLIST:
+                // it may not convenient to users when delete new or exist
+                // playlist without any notification.
+                // show a dialog to confirm deleting this playlist.
+                // get playlist name
+                if ("My recordings".equals(mTitle)) {
+                    mTitle = this.getResources().getString(
+                            R.string.audio_db_playlist_name);
+                }
+                String desc = getString(R.string.delete_playlist_message, mTitle);
+                Uri uri = ContentUris.withAppendedId(
+                        MediaStore.Audio.Playlists.EXTERNAL_CONTENT_URI, id);
+                Bundle b = new Bundle();
+                b.putString("description", desc);
+                b.putParcelable("Playlist", uri);
+                intent.setClass(parentActivity, DeleteItems.class);
+                intent.putExtras(b);
+                startActivityForResult(intent, -1);
+                break;
+            case EDIT_PLAYLIST:
+                if (id == RECENTLY_ADDED_PLAYLIST) {
+                    intent.setClass(parentActivity, WeekSelector.class);
+                    startActivityForResult(intent, CHANGE_WEEKS);
+                    return true;
+                } else {
+                    Log.e(TAG, "should not be here");
+                }
+                break;
+            case RENAME_PLAYLIST:
+                intent.setClass(parentActivity, RenamePlaylist.class);
+                intent.putExtra("rename", Long.valueOf(id));
+                startActivityForResult(intent, RENAME_PLAYLIST);
+                break;
 
-        case ADD_BY_FILEMANAGER:
-            mPlaylistId = id;
-            Intent innerIntent = new Intent(Intent.ACTION_GET_CONTENT);
-            innerIntent.setType("audio/*");
-            innerIntent.addCategory("android.intent.category.ADD_MUSIC");
-            startActivityForResult(innerIntent, REQUEST_CODE_FILE);
-            break;
+            case ADD_BY_FILEMANAGER:
+                mPlaylistId = id;
+                Intent innerIntent = new Intent(Intent.ACTION_GET_CONTENT);
+                innerIntent.setType("audio/*");
+                innerIntent.addCategory("android.intent.category.ADD_MUSIC");
+                startActivityForResult(innerIntent, REQUEST_CODE_FILE);
+                break;
         }
         return true;
     }
@@ -596,30 +671,30 @@ public class PlaylistBrowserFragment extends Fragment implements
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
         switch (requestCode) {
-        case SCAN_DONE:
-            if (resultCode == parentActivity.RESULT_CANCELED) {
-                parentActivity.finish();
-            } else if (mAdapter != null) {
-                getPlaylistCursor(mAdapter.getQueryHandler(), null);
-            }
-            break;
-        case REQUEST_CODE_FILE:
-            if (resultCode == parentActivity.RESULT_OK) {
-                Uri uri = intent.getData();
-               if (getUriFromPath(parentActivity,uri) != 0) {
-                    long [] selectSong = new long [1];
-                    selectSong[0] = getUriFromPath(parentActivity,uri);
-                    int id = mPlaylistId;
-                    if (mPlaylistId == FAVORITE_PLAYLIST) {
-                        id = MusicUtils.idForplaylist(getActivity(), "My Favorite");
-                    }
-                    MusicUtils.addToPlaylist(parentActivity.getApplicationContext(),
-                            selectSong, id);
-                } else {
-                    Toast.makeText(parentActivity, R.string.add_file_failed, Toast.LENGTH_SHORT).show();
+            case SCAN_DONE:
+                if (resultCode == Activity.RESULT_CANCELED) {
+                    parentActivity.finish();
+                } else if (mAdapter != null) {
+                    getPlaylistCursor(mAdapter.getQueryHandler(), null);
                 }
-            }
-            break;
+                break;
+            case REQUEST_CODE_FILE:
+                if (resultCode == Activity.RESULT_OK) {
+                    Uri uri = intent.getData();
+                    if (getUriFromPath(parentActivity, uri) != 0) {
+                        long[] selectSong = new long[1];
+                        selectSong[0] = getUriFromPath(parentActivity, uri);
+                        int id = mPlaylistId;
+                        if (mPlaylistId == FAVORITE_PLAYLIST) {
+                            id = MusicUtils.idForplaylist(getActivity(), "My Favorite");
+                        }
+                        MusicUtils.addToPlaylist(parentActivity.getApplicationContext(),
+                                selectSong, id);
+                    } else {
+                        Toast.makeText(parentActivity, R.string.add_file_failed, Toast.LENGTH_SHORT).show();
+                    }
+                }
+                break;
         }
     }
 
@@ -631,10 +706,10 @@ public class PlaylistBrowserFragment extends Fragment implements
         Cursor c = null;
         try {
             c = resolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, null,
-                    MediaStore.Audio.Media.DATA + "=?", new String[] {
-                        path
+                    MediaStore.Audio.Media.DATA + "=?", new String[]{
+                            path
                     }, null);
-            if (c !=null && c.getCount()>0) {
+            if (c != null && c.getCount() > 0) {
                 c.moveToFirst();
                 songid = c.getLong(c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID));
 
@@ -650,84 +725,11 @@ public class PlaylistBrowserFragment extends Fragment implements
         return songid;
     }
 
-    public static String getMediaPath(final Context context, final Uri uri) {
-
-        // DocumentProvider
-        if (DocumentsContract.isDocumentUri(context, uri)) {
-
-            // MediaProvider
-            if (isMediaDocument(uri)) {
-                final String docId = DocumentsContract.getDocumentId(uri);
-                final String[] split = docId.split(":");
-                final String type = split[0];
-
-                Uri contentUri = null;
-                if ("audio".equals(type)) {
-                    contentUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-                }
-
-                final String selection = "_id=?";
-                final String[] selectionArgs = new String[] {
-                        split[1]
-                };
-
-                return getDataColumn(context, contentUri, selection, selectionArgs);
-            }
-        }
-        // MediaStore (and general)
-        else if ("content".equalsIgnoreCase(uri.getScheme())) {
-            return getDataColumn(context, uri, null, null);
-        }
-        // File
-        else if ("file".equalsIgnoreCase(uri.getScheme())) {
-            return uri.getPath();
-        }
-
-        return null;
-    }
-
-    /**
-     * Get the value of the data column for this Uri. This is useful for MediaStore Uris, and other
-     * file-based ContentProviders.
-     *
-     * @param context The context.
-     * @param uri The Uri to query.
-     * @param selection (Optional) Filter used in the query.
-     * @param selectionArgs (Optional) Selection arguments used in the query.
-     * @return The value of the _data column, which is typically a file path.
-     */
-    public static String getDataColumn(Context context, Uri uri, String selection,
-            String[] selectionArgs) {
-
-        Cursor cursor = null;
-        final String column = "_data";
-        final String[] projection = {
-                column
-        };
-
-        try {
-            cursor = context.getContentResolver().query(uri, projection, selection, selectionArgs,
-                    null);
-            if (cursor != null && cursor.moveToFirst()) {
-                final int column_index = cursor.getColumnIndexOrThrow(column);
-                return cursor.getString(column_index);
-            }
-        } finally {
-            if (cursor != null)
-                cursor.close();
-        }
-        return null;
-    }
-
-    public static boolean isMediaDocument(Uri uri) {
-        return "com.android.providers.media.documents".equals(uri.getAuthority());
-    }
-
     private void playRecentlyAdded() {
         // do a query for all songs added in the last X weeks
         int X = MusicUtils.getIntPref(parentActivity, "numweeks", 2)
                 * (3600 * 24 * 7);
-        final String[] ccols = new String[] { MediaStore.Audio.Media._ID };
+        final String[] ccols = new String[]{MediaStore.Audio.Media._ID};
         String where = MediaStore.MediaColumns.DATE_ADDED + ">"
                 + (System.currentTimeMillis() / 1000 - X);
         Cursor cursor = MusicUtils.query(parentActivity,
@@ -753,7 +755,7 @@ public class PlaylistBrowserFragment extends Fragment implements
 
     private void playPodcasts() {
         // do a query for all files that are podcasts
-        final String[] ccols = new String[] { MediaStore.Audio.Media._ID };
+        final String[] ccols = new String[]{MediaStore.Audio.Media._ID};
         Cursor cursor = MusicUtils.query(parentActivity,
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, ccols,
                 MediaStore.Audio.Media.IS_PODCAST + "=1", null,
@@ -776,11 +778,8 @@ public class PlaylistBrowserFragment extends Fragment implements
         }
     }
 
-    String[] mCols = new String[] { MediaStore.Audio.Playlists._ID,
-            MediaStore.Audio.Playlists.NAME };
-
     private Cursor getPlaylistCursor(AsyncQueryHandler async,
-            String filterstring) {
+                                     String filterstring) {
 
         StringBuilder where = new StringBuilder();
         where.append(MediaStore.Audio.Playlists.NAME + " != ''");
@@ -846,7 +845,7 @@ public class PlaylistBrowserFragment extends Fragment implements
         // check if there are any podcasts
         Cursor counter = MusicUtils.query(parentActivity,
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                new String[] { "count(*)" }, "is_podcast=1", null, null);
+                new String[]{"count(*)"}, "is_podcast=1", null, null);
         if (counter != null && counter.getCount() > 0) {
             counter.moveToFirst();
             int numpodcasts = counter.getInt(0);
@@ -890,31 +889,9 @@ public class PlaylistBrowserFragment extends Fragment implements
         private String mConstraint = null;
         private boolean mConstraintIsValid = false;
 
-        class ViewHolder {
-            ImageView albumArtIcon1, albumArtIcon2, albumArtIcon3,
-                    albumArtIcon4;
-            TextView tv;
-            CharSequence mTitle;
-        }
-
-        class QueryHandler extends AsyncQueryHandler {
-            QueryHandler(ContentResolver res) {
-                super(res);
-            }
-
-            @Override
-            protected void onQueryComplete(int token, Object cookie,
-                    Cursor cursor) {
-                if (cursor != null) {
-                    cursor = mFragment.mergedCursor(cursor);
-                }
-                mFragment.init(cursor);
-            }
-        }
-
         PlaylistListAdapter(Context context,
-                PlaylistBrowserFragment currentfragment, int layout,
-                Cursor cursor, String[] from, int[] to) {
+                            PlaylistBrowserFragment currentfragment, int layout,
+                            Cursor cursor, String[] from, int[] to) {
             super(context, layout, cursor, from, to);
             mFragment = currentfragment;
             getColumnIndices(cursor);
@@ -944,12 +921,12 @@ public class PlaylistBrowserFragment extends Fragment implements
         public View newView(Context context, Cursor cursor, ViewGroup parent) {
             View v = super.newView(context, cursor, parent);
             ViewHolder vh = new ViewHolder();
-            vh.albumArtIcon1 = (ImageView) v.findViewById(R.id.icon);
-            vh.albumArtIcon2 = (ImageView) v.findViewById(R.id.icon1);
-            vh.albumArtIcon3 = (ImageView) v.findViewById(R.id.icon2);
-            vh.albumArtIcon4 = (ImageView) v.findViewById(R.id.icon3);
+            vh.albumArtIcon1 = v.findViewById(R.id.icon);
+            vh.albumArtIcon2 = v.findViewById(R.id.icon1);
+            vh.albumArtIcon3 = v.findViewById(R.id.icon2);
+            vh.albumArtIcon4 = v.findViewById(R.id.icon3);
 
-            vh.tv = (TextView) v.findViewById(R.id.line1);
+            vh.tv = v.findViewById(R.id.line1);
             Resources r = context.getResources();
             mDefaultAlbumIcon = (BitmapDrawable) r
                     .getDrawable(R.drawable.album_cover);
@@ -957,11 +934,11 @@ public class PlaylistBrowserFragment extends Fragment implements
             return v;
         }
 
-        private void updateAlbumArray(int id, ViewHolder vh){
+        private void updateAlbumArray(int id, ViewHolder vh) {
             Bitmap[] albumartArray = null;
             albumartArray = playlistMap.get(id);
-            ImageView imageViews[] = new ImageView[] { vh.albumArtIcon1,
-                    vh.albumArtIcon2, vh.albumArtIcon3, vh.albumArtIcon4 };
+            ImageView[] imageViews = new ImageView[]{vh.albumArtIcon1,
+                    vh.albumArtIcon2, vh.albumArtIcon3, vh.albumArtIcon4};
             if (albumartArray != null) {
                 if (albumartArray.length == 1) {
                     if (albumartArray[0] != null) {
@@ -1022,115 +999,6 @@ public class PlaylistBrowserFragment extends Fragment implements
             }
         }
 
-        private class DownloadAlbumArt extends AsyncTask<Void, Void, Void> {
-            String[] mPlaylistMemberCols1 = new String[] {
-                    MediaStore.Audio.Media.ALBUM_ID,
-                    MediaStore.Audio.Media.ARTIST };
-            int id;
-            Bitmap[] mAlbumArtArray;
-            ViewHolder vh;
-
-            public DownloadAlbumArt(int id, ViewHolder vh) {
-                this.id = id;
-                this.vh = vh;
-            }
-
-            @Override
-            protected void onPostExecute(Void result) {
-                // TODO Auto-generated method stub
-                super.onPostExecute(result);
-                if (mAlbumArtArray != null && !MusicUtils.mIsScreenOff) {
-                    updateAlbumArray(id, vh);
-                }
-            }
-            @Override
-            protected Void doInBackground(Void... params) {
-                try {
-                    if (id != -1) {
-                        Uri uri = MediaStore.Audio.Playlists.Members
-                                .getContentUri("external", Long.valueOf(id));
-                        Cursor ret = parentActivity.getContentResolver().query(
-                                uri, mPlaylistMemberCols1, null, null, null);
-                        try {
-                        if (ret.moveToFirst()) {
-                            int count = ret.getCount();
-                            if (count > 4)
-                                count = 4;
-                            mAlbumArtArray = new Bitmap[count];
-                            for (int j = 0; j < count; j++) {
-                                long albumId = ret
-                                        .getLong(ret
-                                                .getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID));
-                                Bitmap b = MusicUtils.getArtworkQuick(
-                                        parentActivity, albumId,
-                                        mDefaultAlbumIcon.getBitmap()
-                                                .getWidth(), mDefaultAlbumIcon
-                                                .getBitmap().getHeight());
-                                if (b == null) {
-                                    b = mDefaultAlbumIcon.getBitmap();
-                                }
-                                mAlbumArtArray[j] = b;
-                                ret.moveToNext();
-                            }
-                        }
-                        } catch (SQLiteException e) {
-                        } finally {
-                            if (ret != null) {
-                                ret.close();
-                            }
-                        }
-                    } else {
-                        int X = MusicUtils.getIntPref(parentActivity,
-                                "numweeks", 2) * (3600 * 24 * 7);
-                        final String[] ccols = new String[] { MediaStore.Audio.Media.ALBUM_ID };
-                        String where1 = MediaStore.MediaColumns.DATE_ADDED
-                                + ">" + (System.currentTimeMillis() / 1000 - X);
-                        Cursor cursor = MusicUtils.query(parentActivity,
-                                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                ccols, where1, null,
-                                MediaStore.Audio.Media.DEFAULT_SORT_ORDER);
-                        try {
-                            int len = cursor.getCount();
-                            if (len > 4)
-                                len = 4;
-                            mAlbumArtArray = new Bitmap[len];
-                            String[] list = new String[4];
-                            for (int i = 0; i < list.length; i++) {
-                                if (cursor.moveToNext()) {
-                                    long albumId = cursor
-                                            .getLong(cursor
-                                                    .getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID));
-                                    Bitmap b = MusicUtils.getArtworkQuick(
-                                            parentActivity, albumId,
-                                            mDefaultAlbumIcon.getBitmap()
-                                                    .getWidth(),
-                                            mDefaultAlbumIcon.getBitmap()
-                                                    .getHeight());
-                                    if (b == null) {
-                                        b = mDefaultAlbumIcon.getBitmap();
-                                    }
-                                    mAlbumArtArray[i] = b;
-                                }
-                            }
-                        } catch (SQLiteException ex) {
-                        } finally {
-                            if (cursor != null) {
-                                cursor.close();
-                            }
-                        }
-                    }
-                    if(mAlbumArtArray!=null)
-                        playlistMap.put(id, mAlbumArtArray);
-                } catch (Exception e) {
-                    System.out.println("Exception caught" + e.getMessage());
-                    e.printStackTrace();
-                }
-
-                return null;
-            }
-
-        }
-
         @Override
         public void bindView(View view, final Context context, Cursor cursor) {
             final ViewHolder vh = (ViewHolder) view.getTag();
@@ -1169,13 +1037,13 @@ public class PlaylistBrowserFragment extends Fragment implements
                 }
             }
 
-            final ImageView menu = (ImageView) view
+            final ImageView menu = view
                     .findViewById(R.id.play_indicator);
             menu.setTag(id);
             menu.setOnClickListener(new OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    if (mFragment.mPopupMenu != null ) {
+                    if (mFragment.mPopupMenu != null) {
                         mFragment.mPopupMenu.dismiss();
                     }
                     mFragment.mTitle = vh.mTitle;
@@ -1231,7 +1099,7 @@ public class PlaylistBrowserFragment extends Fragment implements
                     mFragment.mPlaylistCursor = null;
                 }
                 mFragment.mPlaylistCursor = cursor;
-                if ((cursor != null && !cursor.isClosed()) || cursor == null) {
+                if (cursor == null || !cursor.isClosed()) {
                     super.changeCursor(cursor);
                     getColumnIndices(cursor);
                 }
@@ -1243,7 +1111,7 @@ public class PlaylistBrowserFragment extends Fragment implements
             String s = constraint.toString();
             if (mConstraintIsValid
                     && ((s == null && mConstraint == null) || (s != null && s
-                            .equals(mConstraint)))) {
+                    .equals(mConstraint)))) {
                 return getCursor();
             }
             Cursor c = mFragment.getPlaylistCursor(null, s);
@@ -1251,7 +1119,137 @@ public class PlaylistBrowserFragment extends Fragment implements
             mConstraintIsValid = true;
             return c;
         }
-    }
 
-    private Cursor mPlaylistCursor;
+        class ViewHolder {
+            ImageView albumArtIcon1, albumArtIcon2, albumArtIcon3,
+                    albumArtIcon4;
+            TextView tv;
+            CharSequence mTitle;
+        }
+
+        class QueryHandler extends AsyncQueryHandler {
+            QueryHandler(ContentResolver res) {
+                super(res);
+            }
+
+            @Override
+            protected void onQueryComplete(int token, Object cookie,
+                                           Cursor cursor) {
+                if (cursor != null) {
+                    cursor = mFragment.mergedCursor(cursor);
+                }
+                mFragment.init(cursor);
+            }
+        }
+
+        private class DownloadAlbumArt extends AsyncTask<Void, Void, Void> {
+            String[] mPlaylistMemberCols1 = new String[]{
+                    MediaStore.Audio.Media.ALBUM_ID,
+                    MediaStore.Audio.Media.ARTIST};
+            int id;
+            Bitmap[] mAlbumArtArray;
+            ViewHolder vh;
+
+            public DownloadAlbumArt(int id, ViewHolder vh) {
+                this.id = id;
+                this.vh = vh;
+            }
+
+            @Override
+            protected void onPostExecute(Void result) {
+                // TODO Auto-generated method stub
+                super.onPostExecute(result);
+                if (mAlbumArtArray != null && !MusicUtils.mIsScreenOff) {
+                    updateAlbumArray(id, vh);
+                }
+            }
+
+            @Override
+            protected Void doInBackground(Void... params) {
+                try {
+                    if (id != -1) {
+                        Uri uri = MediaStore.Audio.Playlists.Members
+                                .getContentUri("external", Long.valueOf(id));
+                        Cursor ret = parentActivity.getContentResolver().query(
+                                uri, mPlaylistMemberCols1, null, null, null);
+                        try {
+                            if (ret.moveToFirst()) {
+                                int count = ret.getCount();
+                                if (count > 4)
+                                    count = 4;
+                                mAlbumArtArray = new Bitmap[count];
+                                for (int j = 0; j < count; j++) {
+                                    long albumId = ret
+                                            .getLong(ret
+                                                    .getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID));
+                                    Bitmap b = MusicUtils.getArtworkQuick(
+                                            parentActivity, albumId,
+                                            mDefaultAlbumIcon.getBitmap()
+                                                    .getWidth(), mDefaultAlbumIcon
+                                                    .getBitmap().getHeight());
+                                    if (b == null) {
+                                        b = mDefaultAlbumIcon.getBitmap();
+                                    }
+                                    mAlbumArtArray[j] = b;
+                                    ret.moveToNext();
+                                }
+                            }
+                        } catch (SQLiteException e) {
+                        } finally {
+                            if (ret != null) {
+                                ret.close();
+                            }
+                        }
+                    } else {
+                        int X = MusicUtils.getIntPref(parentActivity,
+                                "numweeks", 2) * (3600 * 24 * 7);
+                        final String[] ccols = new String[]{MediaStore.Audio.Media.ALBUM_ID};
+                        String where1 = MediaStore.MediaColumns.DATE_ADDED
+                                + ">" + (System.currentTimeMillis() / 1000 - X);
+                        Cursor cursor = MusicUtils.query(parentActivity,
+                                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                ccols, where1, null,
+                                MediaStore.Audio.Media.DEFAULT_SORT_ORDER);
+                        try {
+                            int len = cursor.getCount();
+                            if (len > 4)
+                                len = 4;
+                            mAlbumArtArray = new Bitmap[len];
+                            String[] list = new String[4];
+                            for (int i = 0; i < list.length; i++) {
+                                if (cursor.moveToNext()) {
+                                    long albumId = cursor
+                                            .getLong(cursor
+                                                    .getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID));
+                                    Bitmap b = MusicUtils.getArtworkQuick(
+                                            parentActivity, albumId,
+                                            mDefaultAlbumIcon.getBitmap()
+                                                    .getWidth(),
+                                            mDefaultAlbumIcon.getBitmap()
+                                                    .getHeight());
+                                    if (b == null) {
+                                        b = mDefaultAlbumIcon.getBitmap();
+                                    }
+                                    mAlbumArtArray[i] = b;
+                                }
+                            }
+                        } catch (SQLiteException ex) {
+                        } finally {
+                            if (cursor != null) {
+                                cursor.close();
+                            }
+                        }
+                    }
+                    if (mAlbumArtArray != null)
+                        playlistMap.put(id, mAlbumArtArray);
+                } catch (Exception e) {
+                    System.out.println("Exception caught" + e.getMessage());
+                    e.printStackTrace();
+                }
+
+                return null;
+            }
+
+        }
+    }
 }

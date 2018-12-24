@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright (C) 2009 The Android Open Source Project
+<?xml version="1.0" encoding="utf-8"?><!-- Copyright (C) 2009 The Android Open Source Project
 
      Licensed under the Apache License, Version 2.0 (the "License");
      you may not use this file except in compliance with the License.
@@ -15,13 +14,12 @@
 -->
 
 <searchable xmlns:android="http://schemas.android.com/apk/res/android"
-    android:label="@string/search_title"
     android:hint="@string/search_hint"
     android:includeInGlobalSearch="true"
+    android:label="@string/search_title"
 
-    android:searchSuggestAuthority="media"
-    android:searchSuggestPath="external/audio/search"
-    android:searchSuggestThreshold="3"
-    android:searchSuggestIntentAction="android.intent.action.VIEW"
     android:searchSettingsDescription="@string/search_settings_description"
-/>
+    android:searchSuggestAuthority="media"
+    android:searchSuggestIntentAction="android.intent.action.VIEW"
+    android:searchSuggestPath="external/audio/search"
+    android:searchSuggestThreshold="3" />

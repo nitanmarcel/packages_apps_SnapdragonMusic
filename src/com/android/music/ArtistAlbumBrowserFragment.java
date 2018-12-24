@@ -19,12 +19,6 @@
 
 package com.android.music;
 
-import com.android.music.AlbumBrowserFragment.AlbumListAdapter;
-import com.android.music.MusicUtils.Defs;
-import com.android.music.MusicUtils.ServiceToken;
-import com.android.music.QueryBrowserActivity.QueryListAdapter.QueryHandler;
-import com.android.music.MusicUtils;
-
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Fragment;
@@ -35,7 +29,6 @@ import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -44,94 +37,73 @@ import android.database.CursorWrapper;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
-import android.os.Parcel;
-import android.os.Parcelable;
-import android.os.RemoteException;
 import android.provider.MediaStore;
 import android.text.TextUtils;
-import android.util.Log;
-import android.util.SparseArray;
-import android.view.ContextMenu;
 import android.view.LayoutInflater;
-import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.ViewGroup;
-import android.view.ViewTreeObserver.OnScrollChangedListener;
-import android.view.Window;
-import android.view.ContextMenu.ContextMenuInfo;
 import android.widget.AbsListView;
 import android.widget.AbsListView.OnScrollListener;
-import android.widget.AdapterView;
 import android.widget.ExpandableListView;
+import android.widget.ExpandableListView.OnChildClickListener;
 import android.widget.ExpandableListView.OnGroupClickListener;
-import android.widget.FrameLayout;
 import android.widget.GridLayout;
-import android.widget.ImageButton;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.PopupMenu;
-import android.widget.RelativeLayout;
 import android.widget.PopupMenu.OnMenuItemClickListener;
-import android.widget.SearchView;
 import android.widget.SectionIndexer;
 import android.widget.SimpleCursorTreeAdapter;
 import android.widget.TextView;
-import android.widget.AdapterView.OnItemClickListener;
-import android.widget.ExpandableListView.OnChildClickListener;
-import android.widget.ExpandableListView.ExpandableListContextMenuInfo;
-import android.view.KeyEvent;
 
-import com.android.music.SysApplication;
-import com.codeaurora.music.custom.FragmentsFactory;
-
-import java.text.Collator;
-import java.util.Arrays;
-import java.util.HashMap;
+import com.android.music.MusicUtils.Defs;
+import com.android.music.MusicUtils.ServiceToken;
 
 public class ArtistAlbumBrowserFragment extends Fragment implements
         View.OnCreateContextMenuListener, MusicUtils.Defs, ServiceConnection,
         OnChildClickListener, OnScrollListener {
+    private final static int SEARCH = CHILD_MENU_BASE;
+    private static int mLastListPosCourse = -1;
+    private static int mLastListPosFine = -1;
+    private static SubMenu mSub = null;
+    public PopupMenu mPopupMenu;
+    boolean mIsUnknownArtist;
+    boolean mIsUnknownAlbum;
+    int mExpandPos = -1;
+    boolean isExpanded = false;
     private String mCurrentArtistId;
     private String mCurrentArtistName;
     private String mCurrentAlbumId;
     private String mCurrentAlbumName;
     private String mCurrentArtistNameForAlbum;
-    boolean mIsUnknownArtist;
-    boolean mIsUnknownAlbum;
     private ArtistAlbumListAdapter mAdapter;
+    Handler handler = new Handler() {
+        public void handleMessage(Message msg) {
+            if (mAdapter != null)
+                mAdapter.notifyDataSetChanged();
+        }
+
+    };
     private boolean mAdapterSent;
-    private final static int SEARCH = CHILD_MENU_BASE;
-    private static int mLastListPosCourse = -1;
-    private static int mLastListPosFine = -1;
     private ServiceToken mToken;
     private MediaPlaybackActivity mActivity;
     private TextView mSdErrorMessageView;
     private View mSdErrorMessageIcon;
     private ExpandableListView mExpandableListView;
-    int mExpandPos = -1;
-    boolean isExpanded = false;
     private View mPrevView = null;
-    private boolean isPaused;
-    private int lastVisiblePos = 0;
-    private boolean isScrolling = true;
-    public PopupMenu mPopupMenu;
-    private static SubMenu mSub = null;
-
     OnGroupClickListener onGroupClickListener = new OnGroupClickListener() {
         @SuppressLint("ResourceAsColor")
         @Override
         public boolean onGroupClick(ExpandableListView parent, View v,
-                int groupPosition, long id) {
+                                    int groupPosition, long id) {
             // TODO Auto-generated method stub
             if (isExpanded) {
                 isExpanded = false;
@@ -154,6 +126,28 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
             return true;
         }
     };
+    private boolean isPaused;
+    private int lastVisiblePos = 0;
+    private boolean isScrolling = true;
+    private Handler mReScanHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            if (mAdapter != null) {
+                getArtistCursor(mAdapter.getQueryHandler(), null);
+            }
+        }
+    };
+    private BroadcastReceiver mScanListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            MusicUtils.setSpinnerState(mActivity);
+            mReScanHandler.sendEmptyMessage(0);
+            if (intent.getAction().equals(Intent.ACTION_MEDIA_UNMOUNTED)) {
+                MusicUtils.clearAlbumArtCache();
+            }
+        }
+    };
+    private Cursor mArtistCursor;
 
     public Activity getParentActivity() {
         return mActivity;
@@ -166,7 +160,9 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
         mActivity = (MediaPlaybackActivity) activity;
     }
 
-    /** Called when the activity is first created. */
+    /**
+     * Called when the activity is first created.
+     */
     @SuppressLint("ResourceAsColor")
     @Override
     public void onCreate(Bundle icicle) {
@@ -186,13 +182,13 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
-            Bundle savedInstanceState) {
+                             Bundle savedInstanceState) {
 
         View rootView = inflater.inflate(
                 R.layout.media_picker_activity_expanding, container, false);
-        mSdErrorMessageView = (TextView) rootView.findViewById(R.id.sd_message);
+        mSdErrorMessageView = rootView.findViewById(R.id.sd_message);
         mSdErrorMessageIcon = rootView.findViewById(R.id.sd_icon);
-        mExpandableListView = (ExpandableListView) rootView
+        mExpandableListView = rootView
                 .findViewById(R.id.artist_list);
         mExpandableListView.setOnScrollListener(this);
         mExpandableListView.setGroupIndicator(null);
@@ -203,8 +199,8 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
         mAdapter = new ArtistAlbumListAdapter(mActivity.getApplication(),
                 this,
                 null, // cursor
-                R.layout.track_list_item_group, new String[] {}, new int[] {},
-                R.layout.track_list_item_child, new String[] {}, new int[] {});
+                R.layout.track_list_item_group, new String[]{}, new int[]{},
+                R.layout.track_list_item_child, new String[]{}, new int[]{});
         mExpandableListView.setAdapter(mAdapter);
         getArtistCursor(mAdapter.getQueryHandler(), null);
         return rootView;
@@ -224,7 +220,7 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
 
     @Override
     public void onDestroy() {
-        if (mPopupMenu != null ) {
+        if (mPopupMenu != null) {
             mPopupMenu.dismiss();
         }
         if (mSub != null) {
@@ -267,26 +263,6 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
 
     }
 
-    private BroadcastReceiver mScanListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            MusicUtils.setSpinnerState(mActivity);
-            mReScanHandler.sendEmptyMessage(0);
-            if (intent.getAction().equals(Intent.ACTION_MEDIA_UNMOUNTED)) {
-                MusicUtils.clearAlbumArtCache();
-            }
-        }
-    };
-
-    private Handler mReScanHandler = new Handler() {
-        @Override
-        public void handleMessage(Message msg) {
-            if (mAdapter != null) {
-                getArtistCursor(mAdapter.getQueryHandler(), null);
-            }
-        }
-    };
-
     public void init(Cursor c) {
         if (mAdapter == null) {
             return;
@@ -322,7 +298,7 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
 
     @Override
     public boolean onChildClick(ExpandableListView parent, View v,
-            int groupPosition, int childPosition, long id) {
+                                int groupPosition, int childPosition, long id) {
 
         mCurrentAlbumId = Long.valueOf(id).toString();
         MusicUtils.navigatingTabPosition = 0;
@@ -356,75 +332,75 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
 
     public boolean onContextItemSelected(MenuItem item) {
         switch (item.getItemId()) {
-        case PLAY_SELECTION: {
-            // play everything by the selected artist
-            long[] list = mCurrentArtistId != null ? MusicUtils
-                    .getSongListForArtist(mActivity,
-                            Long.parseLong(mCurrentArtistId)) : MusicUtils
-                    .getSongListForAlbum(mActivity,
-                            Long.parseLong(mCurrentAlbumId));
+            case PLAY_SELECTION: {
+                // play everything by the selected artist
+                long[] list = mCurrentArtistId != null ? MusicUtils
+                        .getSongListForArtist(mActivity,
+                                Long.parseLong(mCurrentArtistId)) : MusicUtils
+                        .getSongListForAlbum(mActivity,
+                                Long.parseLong(mCurrentAlbumId));
 
-            MusicUtils.playAll(mActivity, list, 0);
-            return true;
-        }
-
-        case QUEUE: {
-            long[] list = mCurrentArtistId != null ? MusicUtils
-                    .getSongListForArtist(mActivity,
-                            Long.parseLong(mCurrentArtistId)) : MusicUtils
-                    .getSongListForAlbum(mActivity,
-                            Long.parseLong(mCurrentAlbumId));
-            MusicUtils.addToCurrentPlaylist(mActivity, list);
-            MusicUtils.addToPlaylist(mActivity, list,
-                    MusicUtils.getPlayListId());
-            return true;
-        }
-
-        case NEW_PLAYLIST: {
-            Intent intent = new Intent();
-            intent.setClass(mActivity, CreatePlaylist.class);
-            startActivityForResult(intent, NEW_PLAYLIST);
-            return true;
-        }
-
-        case PLAYLIST_SELECTED: {
-            long[] list = mCurrentArtistId != null ? MusicUtils
-                    .getSongListForArtist(mActivity,
-                            Long.parseLong(mCurrentArtistId)) : MusicUtils
-                    .getSongListForAlbum(mActivity,
-                            Long.parseLong(mCurrentAlbumId));
-            long playlist = item.getIntent().getLongExtra("playlist", 0);
-            MusicUtils.addToPlaylist(mActivity, list, playlist);
-            return true;
-        }
-
-        case DELETE_ITEM: {
-            long[] list;
-            String desc;
-            if (mCurrentArtistId != null) {
-                list = MusicUtils.getSongListForArtist(mActivity,
-                        Long.parseLong(mCurrentArtistId));
-                String f = getString(R.string.delete_artist_desc);
-                desc = String.format(f, mCurrentArtistName);
-            } else {
-                list = MusicUtils.getSongListForAlbum(mActivity,
-                        Long.parseLong(mCurrentAlbumId));
-                String f = getString(R.string.delete_album_desc);
-                desc = String.format(f, mCurrentAlbumName);
+                MusicUtils.playAll(mActivity, list, 0);
+                return true;
             }
-            Bundle b = new Bundle();
-            b.putString("description", desc);
-            b.putLongArray("items", list);
-            Intent intent = new Intent();
-            intent.setClass(mActivity, DeleteItems.class);
-            intent.putExtras(b);
-            startActivityForResult(intent, -1);
-            return true;
-        }
 
-        case SEARCH:
-            doSearch();
-            return true;
+            case QUEUE: {
+                long[] list = mCurrentArtistId != null ? MusicUtils
+                        .getSongListForArtist(mActivity,
+                                Long.parseLong(mCurrentArtistId)) : MusicUtils
+                        .getSongListForAlbum(mActivity,
+                                Long.parseLong(mCurrentAlbumId));
+                MusicUtils.addToCurrentPlaylist(mActivity, list);
+                MusicUtils.addToPlaylist(mActivity, list,
+                        MusicUtils.getPlayListId());
+                return true;
+            }
+
+            case NEW_PLAYLIST: {
+                Intent intent = new Intent();
+                intent.setClass(mActivity, CreatePlaylist.class);
+                startActivityForResult(intent, NEW_PLAYLIST);
+                return true;
+            }
+
+            case PLAYLIST_SELECTED: {
+                long[] list = mCurrentArtistId != null ? MusicUtils
+                        .getSongListForArtist(mActivity,
+                                Long.parseLong(mCurrentArtistId)) : MusicUtils
+                        .getSongListForAlbum(mActivity,
+                                Long.parseLong(mCurrentAlbumId));
+                long playlist = item.getIntent().getLongExtra("playlist", 0);
+                MusicUtils.addToPlaylist(mActivity, list, playlist);
+                return true;
+            }
+
+            case DELETE_ITEM: {
+                long[] list;
+                String desc;
+                if (mCurrentArtistId != null) {
+                    list = MusicUtils.getSongListForArtist(mActivity,
+                            Long.parseLong(mCurrentArtistId));
+                    String f = getString(R.string.delete_artist_desc);
+                    desc = String.format(f, mCurrentArtistName);
+                } else {
+                    list = MusicUtils.getSongListForAlbum(mActivity,
+                            Long.parseLong(mCurrentAlbumId));
+                    String f = getString(R.string.delete_album_desc);
+                    desc = String.format(f, mCurrentAlbumName);
+                }
+                Bundle b = new Bundle();
+                b.putString("description", desc);
+                b.putLongArray("items", list);
+                Intent intent = new Intent();
+                intent.setClass(mActivity, DeleteItems.class);
+                intent.putExtras(b);
+                startActivityForResult(intent, -1);
+                return true;
+            }
+
+            case SEARCH:
+                doSearch();
+                return true;
         }
         return super.onContextItemSelected(item);
     }
@@ -467,40 +443,40 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
         switch (requestCode) {
-        case SCAN_DONE:
-            if (resultCode == mActivity.RESULT_CANCELED) {
-                mActivity.finish();
-            } else {
-                getArtistCursor(mAdapter.getQueryHandler(), null);
-            }
-            break;
-
-        case NEW_PLAYLIST:
-            if (resultCode == mActivity.RESULT_OK) {
-                Uri uri = intent.getData();
-                if (uri != null) {
-                    long[] list = null;
-                    if (mCurrentArtistId != null) {
-                        list = MusicUtils.getSongListForArtist(mActivity,
-                                Long.parseLong(mCurrentArtistId));
-                    } else if (mCurrentAlbumId != null) {
-                        list = MusicUtils.getSongListForAlbum(mActivity,
-                                Long.parseLong(mCurrentAlbumId));
-                    }
-                    MusicUtils.addToPlaylist(mActivity, list,
-                            Long.parseLong(uri.getLastPathSegment()));
+            case SCAN_DONE:
+                if (resultCode == Activity.RESULT_CANCELED) {
+                    mActivity.finish();
+                } else {
+                    getArtistCursor(mAdapter.getQueryHandler(), null);
                 }
-            }
-            break;
+                break;
+
+            case NEW_PLAYLIST:
+                if (resultCode == Activity.RESULT_OK) {
+                    Uri uri = intent.getData();
+                    if (uri != null) {
+                        long[] list = null;
+                        if (mCurrentArtistId != null) {
+                            list = MusicUtils.getSongListForArtist(mActivity,
+                                    Long.parseLong(mCurrentArtistId));
+                        } else if (mCurrentAlbumId != null) {
+                            list = MusicUtils.getSongListForAlbum(mActivity,
+                                    Long.parseLong(mCurrentAlbumId));
+                        }
+                        MusicUtils.addToPlaylist(mActivity, list,
+                                Long.parseLong(uri.getLastPathSegment()));
+                    }
+                }
+                break;
         }
     }
 
     private Cursor getArtistCursor(AsyncQueryHandler async, String filter) {
 
-        String[] cols = new String[] { MediaStore.Audio.Artists._ID,
+        String[] cols = new String[]{MediaStore.Audio.Artists._ID,
                 MediaStore.Audio.Artists.ARTIST,
                 MediaStore.Audio.Artists.NUMBER_OF_ALBUMS,
-                MediaStore.Audio.Artists.NUMBER_OF_TRACKS };
+                MediaStore.Audio.Artists.NUMBER_OF_TRACKS};
 
         Uri uri = MediaStore.Audio.Artists.EXTERNAL_CONTENT_URI;
         if (!TextUtils.isEmpty(filter)) {
@@ -582,16 +558,62 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
         }
     }
 
+    public void onServiceConnected(ComponentName name, IBinder service) {
+        mActivity
+                .updateNowPlaying(getParentActivity());
+    }
+
+    public void onServiceDisconnected(ComponentName name) {
+        mActivity.finish();
+    }
+
+    public void onScrollStateChanged(final AbsListView view, int scrollState) {
+        switch (scrollState) {
+            case OnScrollListener.SCROLL_STATE_IDLE:
+                isScrolling = false;
+                int from = view.getFirstVisiblePosition();
+                int to = view.getLastVisiblePosition();
+                new MusicUtils.BitmapDownloadThread(getParentActivity(), handler,
+                        from, to).start();
+                break;
+            case OnScrollListener.SCROLL_STATE_TOUCH_SCROLL:
+                isScrolling = true;
+                break;
+            case OnScrollListener.SCROLL_STATE_FLING:
+                isScrolling = true;
+                break;
+        }
+    }
+
+    @Override
+    public void onScroll(AbsListView view, int firstVisibleItem,
+                         int visibleItemCount, int totalItemCount) {
+        // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration config) {
+        super.onConfigurationChanged(config);
+        if (mPopupMenu != null) {
+            mPopupMenu.dismiss();
+        }
+        if (mSub != null) {
+            mSub.close();
+        }
+        Fragment fragment = new ArtistAlbumBrowserFragment();
+        Bundle args = getArguments();
+        fragment.setArguments(args);
+        getFragmentManager().beginTransaction()
+                .replace(R.id.fragment_page, fragment, "artist_fragment")
+                .commitAllowingStateLoss();
+    }
+
     static class ArtistAlbumListAdapter extends SimpleCursorTreeAdapter
             implements SectionIndexer {
 
-        private Drawable mNowPlayingOverlay;
         private final BitmapDrawable mDefaultArtistIcon;
         private final BitmapDrawable mDefaultAlbumIcon;
-        private int mGroupArtistIdIdx;
-        private int mGroupArtistIdx;
-        private int mGroupAlbumIdx;
-        private int mGroupSongIdx;
         private final Context mContext;
         private final Resources mResources;
         private final String mAlbumSongSeparator;
@@ -599,44 +621,23 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
         private final StringBuilder mBuffer = new StringBuilder();
         private final Object[] mFormatArgs = new Object[1];
         private final Object[] mFormatArgs3 = new Object[3];
+        Cursor mAlbumCursor;
+        private Drawable mNowPlayingOverlay;
+        private int mGroupArtistIdIdx;
+        private int mGroupArtistIdx;
+        private int mGroupAlbumIdx;
+        private int mGroupSongIdx;
         private MusicAlphabetIndexer mIndexer;
         private ArtistAlbumBrowserFragment mFragment;
         private AsyncQueryHandler mQueryHandler;
         private String mConstraint = null;
         private String mUnknownArtist;
         private boolean mConstraintIsValid = false;
-        Cursor mAlbumCursor;
-
-        static class ViewHolder {
-            TextView line1;
-            TextView line2;
-            ImageView play_indicator;
-            ImageView mChild1, mChild2, mChild3, mChild4, icon;
-            GridLayout mImgHolder;
-            boolean isViewAdded;
-            String aName;
-            View view = null;
-            String mCurrentArtistID, mCurrentAlbumID, mCurrentArtistName,
-                    mCurrentAlbumName;
-        }
-
-        class QueryHandler extends AsyncQueryHandler {
-            QueryHandler(ContentResolver res) {
-                super(res);
-            }
-
-            @Override
-            protected void onQueryComplete(int token, Object cookie,
-                    Cursor cursor) {
-                // Log.i("@@@", "query complete");
-                mFragment.init(cursor);
-            }
-        }
 
         ArtistAlbumListAdapter(Context context,
-                ArtistAlbumBrowserFragment fragment, Cursor cursor,
-                int glayout, String[] gfrom, int[] gto, int clayout,
-                String[] cfrom, int[] cto) {
+                               ArtistAlbumBrowserFragment fragment, Cursor cursor,
+                               int glayout, String[] gfrom, int[] gto, int clayout,
+                               String[] cfrom, int[] cto) {
             super(context, cursor, glayout, gfrom, gto, clayout, cfrom, cto);
             mQueryHandler = new QueryHandler(context.getContentResolver());
             mFragment = fragment;
@@ -692,36 +693,36 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
 
         @Override
         public View newGroupView(Context context, Cursor cursor,
-                boolean isExpanded, ViewGroup parent) {
+                                 boolean isExpanded, ViewGroup parent) {
             View v = super.newGroupView(context, cursor, isExpanded, parent);
             ViewHolder vh = new ViewHolder();
-            vh.line1 = (TextView) v.findViewById(R.id.line1);
-            vh.line2 = (TextView) v.findViewById(R.id.line2);
-            vh.play_indicator = (ImageView) v.findViewById(R.id.play_indicator);
+            vh.line1 = v.findViewById(R.id.line1);
+            vh.line2 = v.findViewById(R.id.line2);
+            vh.play_indicator = v.findViewById(R.id.play_indicator);
             ((MediaPlaybackActivity) mFragment.getParentActivity())
                     .setTouchDelegate(vh.play_indicator);
-            vh.mImgHolder = (GridLayout) v.findViewById(R.id.iconTabbedView);
-            vh.mChild1 = (ImageView) v.findViewById(R.id.img1);
-            vh.mChild2 = (ImageView) v.findViewById(R.id.img2);
-            vh.mChild3 = (ImageView) v.findViewById(R.id.img3);
-            vh.mChild4 = (ImageView) v.findViewById(R.id.img4);
+            vh.mImgHolder = v.findViewById(R.id.iconTabbedView);
+            vh.mChild1 = v.findViewById(R.id.img1);
+            vh.mChild2 = v.findViewById(R.id.img2);
+            vh.mChild3 = v.findViewById(R.id.img3);
+            vh.mChild4 = v.findViewById(R.id.img4);
             v.setTag(vh);
             return v;
         }
 
         @Override
         public View newChildView(Context context, Cursor cursor,
-                boolean isLastChild, ViewGroup parent) {
+                                 boolean isLastChild, ViewGroup parent) {
             View v = super.newChildView(context, cursor, isLastChild, parent);
             ViewHolder vh = new ViewHolder();
-            vh.line1 = (TextView) v.findViewById(R.id.line1);
-            vh.line2 = (TextView) v.findViewById(R.id.line2);
-            vh.play_indicator = (ImageView) v
+            vh.line1 = v.findViewById(R.id.line1);
+            vh.line2 = v.findViewById(R.id.line2);
+            vh.play_indicator = v
                     .findViewById(R.id.play_indicator_child);
             ((MediaPlaybackActivity) mFragment.getParentActivity())
                     .setTouchDelegate(vh.play_indicator);
-            vh.mImgHolder = (GridLayout) v.findViewById(R.id.iconTabbedView);
-            vh.icon = (ImageView) v.findViewById(R.id.icon);
+            vh.mImgHolder = v.findViewById(R.id.iconTabbedView);
+            vh.icon = v.findViewById(R.id.icon);
             vh.icon.setBackgroundDrawable(mDefaultAlbumIcon);
             v.setTag(vh);
             return v;
@@ -730,12 +731,12 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
         @SuppressWarnings("deprecation")
         @Override
         public void bindGroupView(View view, Context context, Cursor cursor,
-                boolean isexpanded) {
+                                  boolean isexpanded) {
 
             final ViewHolder vh = (ViewHolder) view.getTag();
-            ImageView layout[] = new ImageView[] { vh.mChild1, vh.mChild2,
-                    vh.mChild3, vh.mChild4 };
-            for(ImageView img:layout) img.setVisibility(View.GONE);
+            ImageView[] layout = new ImageView[]{vh.mChild1, vh.mChild2,
+                    vh.mChild3, vh.mChild4};
+            for (ImageView img : layout) img.setVisibility(View.GONE);
 
             vh.mImgHolder.setBackgroundResource(R.drawable.unknown_artists);
             String artist = cursor.getString(mGroupArtistIdx);
@@ -785,7 +786,7 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
                             }
 
                         } else {
-                            if(numalbums == 3){
+                            if (numalbums == 3) {
                                 layout[3].setVisibility(View.GONE);
                             }
                             for (int i = 0; i < albumArts.length; i++) {
@@ -819,7 +820,7 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
                 @SuppressLint("NewApi")
                 @Override
                 public void onClick(View v) {
-                    if (mFragment.mPopupMenu != null ) {
+                    if (mFragment.mPopupMenu != null) {
                         mFragment.mPopupMenu.dismiss();
                     }
                     // TODO Auto-generated method stub
@@ -852,7 +853,7 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
 
         @Override
         public void bindChildView(View view, Context context, Cursor cursor,
-                boolean islast) {
+                                  boolean islast) {
 
             final ViewHolder vh = (ViewHolder) view.getTag();
             vh.mCurrentArtistID = cursor.getString(mGroupArtistIdIdx);
@@ -921,7 +922,7 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
                 @SuppressLint("NewApi")
                 @Override
                 public void onClick(View v) {
-                    if (mFragment.mPopupMenu != null ) {
+                    if (mFragment.mPopupMenu != null) {
                         mFragment.mPopupMenu.dismiss();
                     }
                     // TODO Auto-generated method stub
@@ -961,11 +962,11 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
             long id = groupCursor.getLong(groupCursor
                     .getColumnIndexOrThrow(MediaStore.Audio.Artists._ID));
 
-            String[] cols = new String[] { MediaStore.Audio.Albums._ID,
+            String[] cols = new String[]{MediaStore.Audio.Albums._ID,
                     MediaStore.Audio.Albums.ALBUM,
                     MediaStore.Audio.Albums.NUMBER_OF_SONGS,
                     MediaStore.Audio.Albums.NUMBER_OF_SONGS_FOR_ARTIST,
-                    MediaStore.Audio.Albums.ALBUM_ART };
+                    MediaStore.Audio.Albums.ALBUM_ART};
             Cursor c = MusicUtils.query(mFragment.getParentActivity(),
                     MediaStore.Audio.Artists.Albums.getContentUri("external",
                             id), cols, null, null,
@@ -1031,7 +1032,7 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
                     mFragment.mArtistCursor = null;
                 }
                 mFragment.mArtistCursor = cursor;
-                if ((cursor != null && !cursor.isClosed()) || cursor == null) {
+                if (cursor == null || !cursor.isClosed()) {
                     getColumnIndices(cursor);
                     super.changeCursor(cursor);
                 }
@@ -1043,7 +1044,7 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
             String s = constraint.toString();
             if (mConstraintIsValid
                     && ((s == null && mConstraint == null) || (s != null && s
-                            .equals(mConstraint)))) {
+                    .equals(mConstraint)))) {
                 return getCursor();
             }
             Cursor c = mFragment.getArtistCursor(null, s);
@@ -1063,68 +1064,32 @@ public class ArtistAlbumBrowserFragment extends Fragment implements
         public int getSectionForPosition(int position) {
             return 0;
         }
-    }
 
-    private Cursor mArtistCursor;
-
-    public void onServiceConnected(ComponentName name, IBinder service) {
-        ((MediaPlaybackActivity) mActivity)
-                .updateNowPlaying(getParentActivity());
-    }
-
-    public void onServiceDisconnected(ComponentName name) {
-        mActivity.finish();
-    }
-
-    Handler handler = new Handler() {
-        public void handleMessage(Message msg) {
-            if (mAdapter != null)
-                mAdapter.notifyDataSetChanged();
-        };
-    };
-
-    public void onScrollStateChanged(final AbsListView view, int scrollState) {
-        switch (scrollState) {
-        case OnScrollListener.SCROLL_STATE_IDLE:
-            isScrolling = false;
-            int from = view.getFirstVisiblePosition();
-            int to = view.getLastVisiblePosition();
-            new MusicUtils.BitmapDownloadThread(getParentActivity(), handler,
-                     from, to).start();
-            break;
-        case OnScrollListener.SCROLL_STATE_TOUCH_SCROLL:
-            isScrolling = true;
-            break;
-        case OnScrollListener.SCROLL_STATE_FLING:
-            isScrolling = true;
-            break;
+        static class ViewHolder {
+            TextView line1;
+            TextView line2;
+            ImageView play_indicator;
+            ImageView mChild1, mChild2, mChild3, mChild4, icon;
+            GridLayout mImgHolder;
+            boolean isViewAdded;
+            String aName;
+            View view = null;
+            String mCurrentArtistID, mCurrentAlbumID, mCurrentArtistName,
+                    mCurrentAlbumName;
         }
-    }
 
+        class QueryHandler extends AsyncQueryHandler {
+            QueryHandler(ContentResolver res) {
+                super(res);
+            }
 
-
-    @Override
-    public void onScroll(AbsListView view, int firstVisibleItem,
-            int visibleItemCount, int totalItemCount) {
-        // TODO Auto-generated method stub
-
-    }
-
-    @Override
-    public void onConfigurationChanged(Configuration config) {
-        super.onConfigurationChanged(config);
-        if (mPopupMenu != null) {
-            mPopupMenu.dismiss();
+            @Override
+            protected void onQueryComplete(int token, Object cookie,
+                                           Cursor cursor) {
+                // Log.i("@@@", "query complete");
+                mFragment.init(cursor);
+            }
         }
-        if (mSub != null) {
-            mSub.close();
-        }
-        Fragment fragment = new ArtistAlbumBrowserFragment();
-        Bundle args = getArguments();
-        fragment.setArguments(args);
-        getFragmentManager().beginTransaction()
-                .replace(R.id.fragment_page, fragment, "artist_fragment")
-                .commitAllowingStateLoss();
     }
 
 }

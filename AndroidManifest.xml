@@ -112,7 +112,7 @@
         </activity>
 
         <activity
-            android:name="com.codeaurora.music.custom.PermissionActivity"
+            android:name="com.android.music.custom.PermissionActivity"
             android:launchMode="singleTask" />
 
         <activity

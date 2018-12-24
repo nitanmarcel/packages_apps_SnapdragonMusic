@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
+<?xml version="1.0" encoding="utf-8"?><!--
   Copyright (c) 2015, The Linux Foundation. All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -29,46 +28,46 @@
 -->
 
 <GridLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/iconTabbedView"
     android:layout_width="@dimen/icon_size"
     android:layout_height="@dimen/icon_size"
     android:background="#e1e1e1"
-    android:paddingStart="8dp"
     android:columnCount="2"
-    android:rowCount="2"
-    android:id="@+id/iconTabbedView">
+    android:paddingStart="8dp"
+    android:rowCount="2">
+
     <ImageView
         android:id="@+id/img0"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:adjustViewBounds="true"
-        android:visibility="gone"/>
+        android:visibility="gone" />
 
     <ImageView
         android:id="@+id/img1"
         android:layout_width="@dimen/icon_tile_size"
         android:layout_height="@dimen/icon_tile_size"
         android:padding="4dp"
-        android:src="@drawable/ic_menu_music_library"/>
+        android:src="@drawable/ic_menu_music_library" />
 
     <ImageView
         android:id="@+id/img2"
         android:layout_width="@dimen/icon_tile_size"
         android:layout_height="@dimen/icon_tile_size"
         android:padding="4dp"
-        android:src="@drawable/ic_menu_music_library"/>
+        android:src="@drawable/ic_menu_music_library" />
 
     <ImageView
         android:id="@+id/img3"
         android:layout_width="@dimen/icon_tile_size"
         android:layout_height="@dimen/icon_tile_size"
         android:padding="4dp"
-        android:src="@drawable/ic_menu_music_library"/>
+        android:src="@drawable/ic_menu_music_library" />
 
     <ImageView
         android:id="@+id/img4"
         android:layout_width="@dimen/icon_tile_size"
         android:layout_height="@dimen/icon_tile_size"
         android:padding="4dp"
-        android:src="@drawable/ic_menu_music_library"/>
+        android:src="@drawable/ic_menu_music_library" />
 </GridLayout>

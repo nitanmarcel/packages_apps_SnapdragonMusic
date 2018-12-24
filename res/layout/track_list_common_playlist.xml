@@ -52,9 +52,9 @@
                 android:id="@+id/icon"
                 android:layout_width="@dimen/icontile"
                 android:layout_height="wrap_content"
-                android:minHeight="160dp"
                 android:layout_margin="2dp"
                 android:layout_weight="1"
+                android:minHeight="160dp"
                 android:scaleType="centerCrop"
                 android:src="@drawable/album_cover" />
 

@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.codeaurora.music.custom;
+package com.android.music.custom;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
@@ -38,37 +38,40 @@ import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
-import android.media.AudioManager;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.support.v4.view.MotionEventCompat;
+import android.support.v4.view.ViewCompat;
 import android.util.AttributeSet;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.accessibility.AccessibilityEvent;
-import android.support.v4.view.MotionEventCompat;
-import android.support.v4.view.ViewCompat;
 
-import com.android.music.MediaPlaybackActivity;
 import com.android.music.MusicBrowserActivity.SimplePanelSlideListener;
 import com.android.music.MusicUtils;
 
 public class MusicPanelLayout extends ViewGroup {
 
-    private static final int[] INITIAl_ATTRIBUTES = new int[] { android.R.attr.gravity };
+    private static final int[] INITIAl_ATTRIBUTES = new int[]{android.R.attr.gravity};
     private final static int MARGIN_TOP = 45;
     private final static int MARGIN_BOTTOM = 8;
     private static final int INITIAl_BOARD_LENGTH = 64;
     private static final int INITIAL_TRACE_HEIGHT = 4;
     private final static int SCREEN_HEIGHT_CONTROL = 900;
     private final static int WINDOW_TOP_OF_BOTTOM_SPLIT_SCREEN = 250;
-
-    private int mMinimumVelocityOfFling = 400;
-    private int mFadeColourCovered = 0x99000000;
     private static final int INITIAL_OFFSET_PARALAX = 0;
     private static final int ZERO = 0;
+    public static View mSeekBarView;
+    public static View mSongsQueueView;
     private final Paint mFadePaintOccupied = new Paint();
+    private final MusicPanelViewDragHelper mHookHelper;
+    private final Rect mSampleRectangle = new Rect();
+    public BoardState mSlipState = BoardState.COLLAPSED;
+    public boolean mIsQueueEnabled = false;
+    private int mMinimumVelocityOfFling = 400;
+    private int mFadeColourCovered = 0x99000000;
     private Drawable mTraceDrawable = null;
     private int mBoardHeight = -1;
     private int mTraceHeight = -1;
@@ -80,17 +83,8 @@ public class MusicPanelLayout extends ViewGroup {
     private int mSlipViewResId = -1;
     private View mSlippingView;
     private View mInitialView;
-    public static View  mSeekBarView;
-    public static View mSongsQueueView;
-    private int[] mSeekBarCoordinate =  new int[2];
+    private int[] mSeekBarCoordinate = new int[2];
     private int[] mSongsQueueCoordinate = new int[2];
-
-    public enum BoardState {
-        EXPANDED, COLLAPSED, ANCHORED, HIDDEN, DRAGGING
-    }
-
-    public BoardState mSlipState = BoardState.COLLAPSED;
-    public boolean mIsQueueEnabled = false;
     private boolean mIsLandscape = false;
     private BoardState mPreviuosStoppedDraggingSlipState = BoardState.COLLAPSED;
     private float mSlipOffset;
@@ -102,22 +96,7 @@ public class MusicPanelLayout extends ViewGroup {
     private float mDefaultYMotion;
     private float mMainStayPoint = 1.f;
     private ViewHookSlipListener mHookSlipListener;
-    private final MusicPanelViewDragHelper mHookHelper;
     private boolean mPrimaryLayout = true;
-    private final Rect mSampleRectangle = new Rect();
-
-    public interface ViewHookSlipListener {
-
-        public void onViewSlip(View view, float slipOffset);
-
-        public void onViewClosed(View view);
-
-        public void onViewOpened(View view);
-
-        public void onViewMainLined(View panel);
-
-        public void onViewBackStacked(View panel);
-    }
 
     public MusicPanelLayout(Context context) {
         this(context, null);
@@ -154,6 +133,12 @@ public class MusicPanelLayout extends ViewGroup {
         configurationChanged();
     }
 
+    private static boolean isBackgroundOpaque(View view) {
+        Drawable bg = view.getBackground();
+        boolean res = bg != null && bg.getOpacity() == PixelFormat.OPAQUE;
+        return res;
+    }
+
     @Override
     protected void onFinishInflate() {
         super.onFinishInflate();
@@ -169,22 +154,22 @@ public class MusicPanelLayout extends ViewGroup {
         }
     }
 
+    public int getCoveredFadeColor() {
+        return mFadeColourCovered;
+    }
+
     public void setCoveredFadeColor(int color) {
         mFadeColourCovered = color;
         invalidate();
     }
 
-    public int getCoveredFadeColor() {
-        return mFadeColourCovered;
+    public boolean isTouchEnabled() {
+        return mCheckTouchEnabled && mSlippingView != null
+                && mSlipState != BoardState.HIDDEN;
     }
 
     public void setTouchEnabled(boolean enabled) {
         mCheckTouchEnabled = enabled;
-    }
-
-    public boolean isTouchEnabled() {
-        return mCheckTouchEnabled && mSlippingView != null
-                && mSlipState != BoardState.HIDDEN;
     }
 
     public void setPanelHeight(int val) {
@@ -248,7 +233,6 @@ public class MusicPanelLayout extends ViewGroup {
                     }
                 }
             });
-            ;
         }
     }
 
@@ -257,30 +241,30 @@ public class MusicPanelLayout extends ViewGroup {
         setDragView(findViewById(dragViewResId));
     }
 
+    public float getAnchorPoint() {
+        return mMainStayPoint;
+    }
+
     public void setAnchorPoint(float anchorPoint) {
         if (anchorPoint > 0 && anchorPoint <= 1) {
             mMainStayPoint = anchorPoint;
         }
     }
 
-    public float getAnchorPoint() {
-        return mMainStayPoint;
+    public boolean isOverlayed() {
+        return mOverlayData;
     }
 
     public void setOverlayed(boolean overlayed) {
         mOverlayData = overlayed;
     }
 
-    public boolean isOverlayed() {
-        return mOverlayData;
+    public boolean isClipPanel() {
+        return mHookPanel;
     }
 
     public void setClipPanel(boolean clip) {
         mHookPanel = clip;
-    }
-
-    public boolean isClipPanel() {
-        return mHookPanel;
     }
 
     void dispatchOnPanelSlide(View panel) {
@@ -336,12 +320,6 @@ public class MusicPanelLayout extends ViewGroup {
             }
             k = k + 1;
         }
-    }
-
-    private static boolean isBackgroundOpaque(View view) {
-        Drawable bg = view.getBackground();
-        boolean res = bg != null && bg.getOpacity() == PixelFormat.OPAQUE;
-        return res;
     }
 
     @Override
@@ -453,20 +431,20 @@ public class MusicPanelLayout extends ViewGroup {
 
         if (mPrimaryLayout) {
             switch (mSlipState) {
-            case HIDDEN:
-                int top = computeHookViewTopPosition(0.0f)
-                        + (mIsSlippingUp ? +mBoardHeight : -mBoardHeight);
-                mSlipOffset = computeSlideOffset(top);
-                break;
-            case ANCHORED:
-                mSlipOffset = mMainStayPoint;
-                break;
-            case EXPANDED:
-                mSlipOffset = 1.0f;
-                break;
-            default:
-                mSlipOffset = 0.f;
-                break;
+                case HIDDEN:
+                    int top = computeHookViewTopPosition(0.0f)
+                            + (mIsSlippingUp ? +mBoardHeight : -mBoardHeight);
+                    mSlipOffset = computeSlideOffset(top);
+                    break;
+                case ANCHORED:
+                    mSlipOffset = mMainStayPoint;
+                    break;
+                case EXPANDED:
+                    mSlipOffset = 1.0f;
+                    break;
+                default:
+                    mSlipOffset = 0.f;
+                    break;
             }
         }
 
@@ -560,36 +538,36 @@ public class MusicPanelLayout extends ViewGroup {
 
         mSeekBarView.getLocationOnScreen(mSeekBarCoordinate);
         mSongsQueueView.getLocationOnScreen(mSongsQueueCoordinate);
-        if(mIsQueueEnabled && (y > mSongsQueueCoordinate[1])
-                           && (y < mSeekBarCoordinate[1] || mIsLandscape)) {
-           return false;
+        if (mIsQueueEnabled && (y > mSongsQueueCoordinate[1])
+                && (y < mSeekBarCoordinate[1] || mIsLandscape)) {
+            return false;
         }
         switch (action) {
-        case MotionEvent.ACTION_DOWN: {
-            mIsCanNotDrag = false;
-            mDefaultXMotion = x;
-            mDefaultYMotion = y;
-            break;
-        }
-
-        case MotionEvent.ACTION_MOVE: {
-            final float adx = Math.abs(x - mDefaultXMotion);
-            final float ady = Math.abs(y - mDefaultYMotion);
-            final int dragSlop = mHookHelper.getTouchableGradient();
-
-            if (mIsHookViewUsingTouchEvents && adx > dragSlop && ady < dragSlop) {
-                return super.onInterceptTouchEvent(ev);
+            case MotionEvent.ACTION_DOWN: {
+                mIsCanNotDrag = false;
+                mDefaultXMotion = x;
+                mDefaultYMotion = y;
+                break;
             }
 
-            if ((ady > dragSlop && adx > ady)
-                    || !isDragViewUnder((int) mDefaultXMotion,
-                            (int) mDefaultYMotion)) {
-                mHookHelper.cancel();
-                mIsCanNotDrag = true;
-                return false;
+            case MotionEvent.ACTION_MOVE: {
+                final float adx = Math.abs(x - mDefaultXMotion);
+                final float ady = Math.abs(y - mDefaultYMotion);
+                final int dragSlop = mHookHelper.getTouchableGradient();
+
+                if (mIsHookViewUsingTouchEvents && adx > dragSlop && ady < dragSlop) {
+                    return super.onInterceptTouchEvent(ev);
+                }
+
+                if ((ady > dragSlop && adx > ady)
+                        || !isDragViewUnder((int) mDefaultXMotion,
+                        (int) mDefaultYMotion)) {
+                    mHookHelper.cancel();
+                    mIsCanNotDrag = true;
+                    return false;
+                }
+                break;
             }
-            break;
-        }
         }
 
         return mHookHelper.decodeTouchEvents(ev);
@@ -623,7 +601,7 @@ public class MusicPanelLayout extends ViewGroup {
 
     public void setHookState(BoardState state) {
         if (state == null || state == BoardState.DRAGGING) {
-           return;
+            return;
         }
         if (!isEnabled() || (mPrimaryLayout && mSlippingView == null))
             return;
@@ -631,21 +609,21 @@ public class MusicPanelLayout extends ViewGroup {
         if (mPrimaryLayout) {
             mSlipState = state;
         } else {
-           switch (state) {
-            case ANCHORED:
-                smoothSlipTo(mMainStayPoint, 0, false);
-                break;
-            case COLLAPSED:
-                smoothSlipTo(0, 0, false);
-                break;
-            case EXPANDED:
-                smoothSlipTo(1.0f, 0, false);
-                break;
-            case HIDDEN:
-                int newTop = computeHookViewTopPosition(0.0f)
-                        + (mIsSlippingUp ? +mBoardHeight : -mBoardHeight);
-                smoothSlipTo(computeSlideOffset(newTop), 0, false);
-                break;
+            switch (state) {
+                case ANCHORED:
+                    smoothSlipTo(mMainStayPoint, 0, false);
+                    break;
+                case COLLAPSED:
+                    smoothSlipTo(0, 0, false);
+                    break;
+                case EXPANDED:
+                    smoothSlipTo(1.0f, 0, false);
+                    break;
+                case HIDDEN:
+                    int newTop = computeHookViewTopPosition(0.0f)
+                            + (mIsSlippingUp ? +mBoardHeight : -mBoardHeight);
+                    smoothSlipTo(computeSlideOffset(newTop), 0, false);
+                    break;
             }
         }
     }
@@ -673,7 +651,7 @@ public class MusicPanelLayout extends ViewGroup {
         if (mSlipOffset <= 0 && !mOverlayData) {
             lp.height = mIsSlippingUp ? (newTop - getPaddingBottom())
                     : (getHeight() - getPaddingBottom()
-                            - mSlippingView.getMeasuredHeight() - newTop);
+                    - mSlippingView.getMeasuredHeight() - newTop);
             mInitialView.requestLayout();
         } else if (lp.height != defaultHeight && !mOverlayData) {
             lp.height = defaultHeight;
@@ -778,7 +756,7 @@ public class MusicPanelLayout extends ViewGroup {
     }
 
     protected boolean isScrollable(View view, boolean checkV, int dx, int x,
-            int y) {
+                                   int y) {
         boolean matched = false;
         if (view instanceof ViewGroup) {
             ViewGroup viewGroup = (ViewGroup) view;
@@ -793,8 +771,8 @@ public class MusicPanelLayout extends ViewGroup {
                         && y + scrolY >= child.getTop()
                         && y + scrolY < child.getBottom()
                         && isScrollable(child, true, dx,
-                                x + scrolX - child.getLeft(), y + scrolY
-                                        - child.getTop())) {
+                        x + scrolX - child.getLeft(), y + scrolY
+                                - child.getTop())) {
                     matched = true;
                 }
                 k--;
@@ -835,6 +813,101 @@ public class MusicPanelLayout extends ViewGroup {
         HookInstanceSavedState ss = (HookInstanceSavedState) state;
         super.onRestoreInstanceState(ss.getSuperState());
         mSlipState = ss.mSlipState;
+    }
+
+    @Override
+    protected void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        configurationChanged();
+    }
+
+    private void configurationChanged() {
+        mIsLandscape = getResources().getConfiguration().orientation
+                == Configuration.ORIENTATION_LANDSCAPE;
+    }
+
+    public enum BoardState {
+        EXPANDED, COLLAPSED, ANCHORED, HIDDEN, DRAGGING
+    }
+
+    public interface ViewHookSlipListener {
+
+        void onViewSlip(View view, float slipOffset);
+
+        void onViewClosed(View view);
+
+        void onViewOpened(View view);
+
+        void onViewMainLined(View panel);
+
+        void onViewBackStacked(View panel);
+    }
+
+    public static class MusicScreenParams extends ViewGroup.MarginLayoutParams {
+        private static final int[] ATTRS = new int[]{android.R.attr.layout_weight};
+
+        public MusicScreenParams() {
+            super(MATCH_PARENT, MATCH_PARENT);
+        }
+
+        public MusicScreenParams(Context c, AttributeSet attrs) {
+            super(c, attrs);
+            final TypedArray a = c.obtainStyledAttributes(attrs, ATTRS);
+            a.recycle();
+        }
+
+        public MusicScreenParams(int width, int height) {
+            super(width, height);
+        }
+
+        public MusicScreenParams(MarginLayoutParams start) {
+            super(start);
+        }
+
+        public MusicScreenParams(MusicScreenParams start) {
+            super(start);
+        }
+
+        public MusicScreenParams(android.view.ViewGroup.LayoutParams start) {
+            super(start);
+        }
+
+    }
+
+    static class HookInstanceSavedState extends BaseSavedState {
+        public static final Parcelable.Creator<HookInstanceSavedState> CREATOR = new Parcelable.Creator<HookInstanceSavedState>() {
+            @Override
+            public HookInstanceSavedState[] newArray(int size) {
+                return new HookInstanceSavedState[size];
+            }
+
+            @Override
+            public HookInstanceSavedState createFromParcel(Parcel in) {
+                return new HookInstanceSavedState(in);
+            }
+
+        };
+        BoardState mSlipState;
+
+        HookInstanceSavedState(Parcelable superState) {
+            super(superState);
+        }
+
+        private HookInstanceSavedState(Parcel in) {
+            super(in);
+            try {
+                mSlipState = Enum.valueOf(BoardState.class, in.readString());
+            } catch (IllegalArgumentException ex) {
+                mSlipState = BoardState.COLLAPSED;
+            }
+        }
+
+        @Override
+        public void writeToParcel(Parcel out, int flags) {
+            super.writeToParcel(out, flags);
+            out.writeString(mSlipState.toString());
+        }
+
     }
 
     private class DragHelperCallback extends
@@ -911,7 +984,7 @@ public class MusicPanelLayout extends ViewGroup {
 
         @Override
         public void onPanelPositionChanged(View changedView, int left, int top,
-                int dx, int dy) {
+                                           int dx, int dy) {
             onHookSlipped(top);
             invalidate();
         }
@@ -962,88 +1035,5 @@ public class MusicPanelLayout extends ViewGroup {
             invalidate();
         }
 
-    }
-
-    public static class MusicScreenParams extends ViewGroup.MarginLayoutParams {
-        private static final int[] ATTRS = new int[] { android.R.attr.layout_weight };
-
-        public MusicScreenParams() {
-            super(MATCH_PARENT, MATCH_PARENT);
-        }
-
-        public MusicScreenParams(Context c, AttributeSet attrs) {
-            super(c, attrs);
-            final TypedArray a = c.obtainStyledAttributes(attrs, ATTRS);
-            a.recycle();
-        }
-
-        public MusicScreenParams(int width, int height) {
-            super(width, height);
-        }
-
-        public MusicScreenParams(MarginLayoutParams start) {
-            super(start);
-        }
-
-        public MusicScreenParams(MusicScreenParams start) {
-            super(start);
-        }
-
-        public MusicScreenParams(android.view.ViewGroup.LayoutParams start) {
-            super(start);
-        }
-
-    }
-
-    static class HookInstanceSavedState extends BaseSavedState {
-        BoardState mSlipState;
-
-        HookInstanceSavedState(Parcelable superState) {
-            super(superState);
-        }
-
-        public static final Parcelable.Creator<HookInstanceSavedState> CREATOR = new Parcelable.Creator<HookInstanceSavedState>() {
-            @Override
-            public HookInstanceSavedState[] newArray(int size) {
-                return new HookInstanceSavedState[size];
-            }
-
-            @Override
-            public HookInstanceSavedState createFromParcel(Parcel in) {
-                return new HookInstanceSavedState(in);
-            }
-
-        };
-
-        private HookInstanceSavedState(Parcel in) {
-            super(in);
-            try {
-                mSlipState = Enum.valueOf(BoardState.class, in.readString());
-            } catch (IllegalArgumentException ex) {
-                mSlipState = BoardState.COLLAPSED;
-            }
-        }
-
-        @Override
-        public void writeToParcel(Parcel out, int flags) {
-            super.writeToParcel(out, flags);
-            out.writeString(mSlipState.toString());
-        }
-
-    }
-
-    @Override
-    protected void onConfigurationChanged(Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-        configurationChanged();
-    }
-
-    private void configurationChanged() {
-        if (getResources().getConfiguration().orientation
-                == Configuration.ORIENTATION_LANDSCAPE) {
-            mIsLandscape = true;
-        } else {
-            mIsLandscape = false;
-        }
     }
 }
