@@ -31,19 +31,16 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.RemoteException;
 import android.provider.MediaStore;
+import android.support.annotation.NonNull;
 import android.support.v4.widget.DrawerLayout;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
-import android.view.MenuItem;
 import android.view.View;
-import android.view.View.OnClickListener;
 import android.view.Window;
-import android.widget.AdapterView;
 import android.widget.FrameLayout;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
-import android.widget.Toolbar.OnMenuItemClickListener;
 
 import com.android.music.MusicUtils.ServiceToken;
 import com.android.music.custom.FragmentsFactory;
@@ -175,64 +172,53 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
         } else {
             exitLayout.setVisibility(View.GONE);
         }
+
+        mDrawerLayout = findViewById(R.id.drawerLayout);
         mNavigationAdapter = new NavigationDrawerListAdapter(this);
         mDrawerListView.setAdapter(mNavigationAdapter);
         activeTab = MusicUtils.getIntPref(this, "activetab", 0);
-        mDrawerListView
-                .setOnItemClickListener(new AdapterView.OnItemClickListener() {
-                    @Override
-                    public void onItemClick(AdapterView<?> parent, View view,
-                                            int position, long id) {
-                        if (mIsPanelExpanded) {
-                            getSlidingPanelLayout().setHookState(
-                                    BoardState.COLLAPSED);
+        mDrawerListView.setOnItemClickListener((parent, view, position, id) -> {
+            if (mIsPanelExpanded) {
+                getSlidingPanelLayout().setHookState(
+                        BoardState.COLLAPSED);
 
-                        }
-                        activeTab = MusicUtils.getIntPref(
-                                MusicBrowserActivity.this, "activetab", 0);
-                        mNavigationAdapter.setClickPosition(position);
-                        mDrawerLayout.closeDrawer(Gravity.START);
-                        final int toShowPosition = position;
-                        mDrawerLayout.setDrawerListener(new DrawerLayout.DrawerListener() {
-                            @Override
-                            public void onDrawerSlide(View drawerView, float slideOffset) {
-                            }
-
-                            @Override
-                            public void onDrawerOpened(View drawerView) {
-                            }
-
-                            @Override
-                            public void onDrawerClosed(View drawerView) {
-                                showScreen(toShowPosition);
-                            }
-
-                            @Override
-                            public void onDrawerStateChanged(int newState) {
-                            }
-                        });
-                    }
-                });
-        mDrawerLayout = findViewById(R.id.drawerLayout);
-
-        equalizerLayout.setOnClickListener(new OnClickListener() {
-
-            @Override
-            public void onClick(View v) {
-                MusicUtils.startSoundEffectActivity(MusicBrowserActivity.this);
-                mDrawerLayout.closeDrawer(Gravity.START);
             }
+            activeTab = MusicUtils.getIntPref(
+                    MusicBrowserActivity.this, "activetab", 0);
+            mNavigationAdapter.setClickPosition(position);
+            mDrawerLayout.closeDrawer(Gravity.START);
+            final int toShowPosition = position;
+            mDrawerLayout.setDrawerListener(new DrawerLayout.DrawerListener() {
+                @Override
+                public void onDrawerSlide(@NonNull View drawerView, float slideOffset) {
+                }
+
+                @Override
+                public void onDrawerOpened(@NonNull View drawerView) {
+                }
+
+                @Override
+                public void onDrawerClosed(@NonNull View drawerView) {
+                    showScreen(toShowPosition);
+                }
+
+                @Override
+                public void onDrawerStateChanged(int newState) {
+                }
+            });
         });
 
-        exitLayout.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                try {
-                    MusicUtils.sService.stop();
-                    SysApplication.getInstance().exit();
-                } catch (RemoteException e) {
-                    e.printStackTrace();
-                }
+        equalizerLayout.setOnClickListener(v -> {
+            MusicUtils.startSoundEffectActivity(MusicBrowserActivity.this);
+            mDrawerLayout.closeDrawer(Gravity.START);
+        });
+
+        exitLayout.setOnClickListener(v -> {
+            try {
+                MusicUtils.sService.stop();
+                SysApplication.getInstance().exit();
+            } catch (RemoteException e) {
+                e.printStackTrace();
             }
         });
 
@@ -240,30 +226,22 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
             mToolbar.getMenu().clear();
         }
         mToolbar.inflateMenu(R.menu.main);
-        mToolbar.setOnMenuItemClickListener(new OnMenuItemClickListener() {
-
-            @Override
-            public boolean onMenuItemClick(MenuItem item) {
-                // TODO Auto-generated method stub
-                mIsparentActivityFInishing = true;
-                Intent intent = new Intent(MusicBrowserActivity.this,
-                        QueryBrowserActivity.class);
-                startActivity(intent);
-                return false;
-            }
+        mToolbar.setOnMenuItemClickListener(item -> {
+            // TODO Auto-generated method stub
+            mIsparentActivityFInishing = true;
+            Intent intent = new Intent(MusicBrowserActivity.this,
+                    QueryBrowserActivity.class);
+            startActivity(intent);
+            return false;
         });
         mToolbar.setNavigationContentDescription("drawer");
-        mToolbar.setNavigationOnClickListener(new OnClickListener() {
-
-            @Override
-            public void onClick(View v) {
-                if (mToolbar.getNavigationContentDescription().equals("drawer")) {
-                    mDrawerLayout.openDrawer(Gravity.START);
-                } else {
-                    showScreen(MusicUtils.navigatingTabPosition);
-                    mToolbar.setNavigationContentDescription("drawer");
-                    mToolbar.setNavigationIcon(R.drawable.ic_material_light_navigation_drawer);
-                }
+        mToolbar.setNavigationOnClickListener(v -> {
+            if (mToolbar.getNavigationContentDescription().equals("drawer")) {
+                mDrawerLayout.openDrawer(Gravity.START);
+            } else {
+                showScreen(MusicUtils.navigatingTabPosition);
+                mToolbar.setNavigationContentDescription("drawer");
+                mToolbar.setNavigationIcon(R.drawable.ic_material_light_navigation_drawer);
             }
         });
 
