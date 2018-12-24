@@ -31,7 +31,7 @@
     android:radius="64dp">
     <item>
         <shape android:shape="oval">
-            <solid android:color="@color/wave_color" />
+            <solid android:color="@color/colorWhite" />
         </shape>
     </item>
 </ripple>

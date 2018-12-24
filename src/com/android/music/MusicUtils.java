@@ -41,6 +41,7 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.media.audiofx.AudioEffect;
 import android.net.Uri;
@@ -1535,7 +1536,7 @@ public class MusicUtils {
             if (path == null) {
                 return;
             }
-            if (true && MusicUtils.sService != null
+            if (MusicUtils.sService != null
                     && MusicUtils.sService.getAudioId() != -1) {
                 nowPlayingView.setVisibility(View.VISIBLE);
                 nowPlayingView.invalidate();
@@ -1543,21 +1544,17 @@ public class MusicUtils {
                 TextView title = nowPlayingView.findViewById(R.id.song_name);
                 TextView artist = nowPlayingView.findViewById(R.id.artist_name);
                 ImageView image = nowPlayingView.findViewById(R.id.nowplay_icon);
-                final ImageView albumIcon = nowPlayingView.findViewById(R.id.album);
                 ImageButton currPlaylist = nowPlayingView.findViewById(R.id.animViewcurrPlaylist);
                 ImageButton overflow = nowPlayingView.findViewById(R.id.menu_overflow_audio_header);
-                View layout = nowPlayingView.findViewById(R.id.header_layout);
                 if (isExpanded) {
                     image.setVisibility(View.GONE);
                     currPlaylist.setVisibility(View.VISIBLE);
                     overflow.setVisibility(View.VISIBLE);
-                    layout.setBackgroundResource(R.drawable.playingbar_bg_rev);
                     title.setSelected(true);
                 } else {
                     image.setVisibility(View.VISIBLE);
                     currPlaylist.setVisibility(View.GONE);
                     overflow.setVisibility(View.GONE);
-                    layout.setBackgroundResource(R.drawable.playingbar_bg_rev);
                     title.setSelected(false);
                     if (isPlaying()) {
                         image.setImageResource(R.drawable.play_pause);

@@ -28,6 +28,7 @@
 -->
 
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/player_body"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -35,17 +36,20 @@
         android:id="@+id/album_art_view"
         android:layout_width="fill_parent"
         android:layout_height="match_parent"
-        android:layout_above="@+id/timer_view">
+        android:layout_above="@+id/control_layout">
 
         <FrameLayout
             android:id="@+id/current_queue_view"
             android:layout_width="fill_parent"
-            android:layout_height="fill_parent">
+            android:layout_height="fill_parent"
+            android:background="@color/colorBackground">
 
             <ImageView
                 android:id="@+id/album_icon_view"
-                android:layout_width="fill_parent"
-                android:layout_height="fill_parent"
+                android:layout_width="320dp"
+                android:layout_height="320dp"
+                android:layout_gravity="center"
+                android:layout_marginTop="-32dp"
                 android:scaleType="centerCrop"
                 android:src="@drawable/album_cover_background" />
 
@@ -81,56 +85,56 @@
                 android:padding="5dp"
                 android:src="@drawable/favorite_selected" />
         </FrameLayout>
+
     </FrameLayout>
-
-    <RelativeLayout
-        android:id="@+id/timer_view"
-        android:layout_width="match_parent"
-        android:layout_height="16dp"
-        android:layout_above="@+id/control_layout"
-        android:layout_marginBottom="15dp"
-        android:background="@color/colorAccentTranslucent">
-
-        <TextView
-            android:id="@+id/currenttimer"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignParentStart="true"
-            android:layout_centerVertical="true"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:textColor="@color/colorTextPrimary"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/totaltimer"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignParentEnd="true"
-            android:layout_centerVertical="true"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:textColor="@color/colorTextPrimary"
-            android:textSize="12sp" />
-
-        <SeekBar
-            android:id="@+id/progress"
-            style="@style/MusicProgressSlider"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
-            android:layout_toStartOf="@id/totaltimer"
-            android:layout_toEndOf="@id/currenttimer"
-            android:fadingEdge="horizontal" />
-    </RelativeLayout>
 
     <RelativeLayout
         android:id="@+id/control_layout"
         android:layout_width="match_parent"
-        android:layout_height="72dp"
+        android:layout_height="192dp"
         android:layout_alignParentBottom="true"
-        android:layout_marginBottom="20dp"
         android:orientation="horizontal">
+
+        <RelativeLayout
+            android:id="@+id/timer_view"
+            android:layout_width="match_parent"
+            android:layout_height="20dp"
+            android:background="#44000000">
+
+            <TextView
+                android:id="@+id/currenttimer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/totaltimer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <SeekBar
+                android:id="@+id/progress"
+                style="@style/MusicProgressSlider"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:layout_toStartOf="@id/totaltimer"
+                android:layout_toEndOf="@id/currenttimer"
+                android:fadingEdge="horizontal" />
+        </RelativeLayout>
 
         <ImageButton
             android:id="@+id/loop_view"

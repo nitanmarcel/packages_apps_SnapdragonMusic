@@ -19,6 +19,8 @@ package com.android.music;
 import android.animation.Animator;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
+import android.annotation.ColorInt;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Fragment;
@@ -37,6 +39,7 @@ import android.content.res.Configuration;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
+import android.graphics.drawable.Drawable;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.MediaPlayer.OnCompletionListener;
@@ -51,6 +54,8 @@ import android.os.Message;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.provider.MediaStore;
+import android.support.annotation.Nullable;
+import android.support.v7.graphics.Palette;
 import android.text.Layout;
 import android.text.TextUtils;
 import android.text.TextUtils.TruncateAt;
@@ -62,7 +67,6 @@ import android.view.MotionEvent;
 import android.view.SubMenu;
 import android.view.TouchDelegate;
 import android.view.View;
-import android.view.View.OnClickListener;
 import android.view.ViewAnimationUtils;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
@@ -76,6 +80,7 @@ import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.PopupMenu.OnMenuItemClickListener;
 import android.widget.ProgressBar;
+import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.SeekBar.OnSeekBarChangeListener;
 import android.widget.TextView;
@@ -90,6 +95,12 @@ import com.android.music.lyric.Lyric;
 import com.android.music.lyric.LyricAdapter;
 import com.android.music.lyric.LyricView;
 import com.android.music.lyric.PlayListItem;
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.GlideException;
+import com.bumptech.glide.request.RequestListener;
+import com.bumptech.glide.request.RequestOptions;
+import com.bumptech.glide.request.target.Target;
 
 import java.io.File;
 import java.util.Locale;
@@ -163,6 +174,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
     private boolean mDeviceHasDpad;
     private long mStartSeekPos = 0;
     private long mLastSeekEventTime;
+    private int colorPrimaryOld;
     private IMediaPlaybackService mService = null;
     private RepeatingImageButton mPrevButton;
     private ImageButton mPauseButton;
@@ -186,6 +198,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
     private ImageView mLyricIcon;
     private LinearLayout mLandControlPanel;
     private LinearLayout mAudioPlayerBody;
+    private RelativeLayout mControlLayout;
     private LyricView mLyricView;
     Runnable mUpdateResults = new Runnable() {
         public void run() {
@@ -402,21 +415,21 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
     };
     private int seekmethod;
     private boolean paused;
+
+    @SuppressLint("HandlerLeak")
     private final Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case ALBUM_ART_DECODED:
-                    if (msg.obj != null && msg.obj instanceof Bitmap) {
-                        mAlbum.setImageBitmap((Bitmap) msg.obj);
-                        mAlbum.getDrawable().setDither(true);
-                        mAlbumIcon.setImageBitmap((Bitmap) msg.obj);
-                        mAlbumIcon.getDrawable().setDither(true);
+                    if (msg.obj instanceof Bitmap) {
+                        Bitmap bitmap = (Bitmap) msg.obj;
+                        setImageSrc(mAlbum, bitmap, true);
+                        setImageSrc(mAlbumIcon, bitmap, false);
                     } else {
-                        mAlbum.setImageResource(R.drawable.album_cover_background);
-                        mAlbum.getDrawable().setDither(true);
-                        mAlbumIcon.setImageResource(R.drawable.album_cover_background);
-                        mAlbumIcon.getDrawable().setDither(true);
+                        Bitmap bitmap = ViewUtil.drawableToBitmap(getResources().getDrawable(R.drawable.album_cover_background));
+                        setImageSrc(mAlbum, bitmap, true);
+                        setImageSrc(mAlbumIcon, bitmap, false);
                     }
                     break;
 
@@ -466,24 +479,25 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
             }
         }
     };
+
+    @SuppressLint("HandlerLeak")
     public Handler mLyricHandler = new Handler() {
         public void handleMessage(Message msg) {
-            switch (msg.what) {
-                case REFRESH_LYRIC:
-                    try {
-                        if (mService != null && mLyric != null) {
-                            updateDuration(mService.position());
-                        }
-                    } catch (RemoteException e) {
-                        // TODO Auto-generated catch block
+            if (msg.what == REFRESH_LYRIC) {
+                try {
+                    if (mService != null && mLyric != null) {
+                        updateDuration(mService.position());
                     }
-                    if (mHasLrc) {
-                        queueNextRefreshForLyric(REFRESH_MILLIONS);
-                    }
-                    break;
+                } catch (RemoteException e) {
+                    // TODO Auto-generated catch block
+                }
+                if (mHasLrc) {
+                    queueNextRefreshForLyric(REFRESH_MILLIONS);
+                }
             }
         }
     };
+
     private View.OnClickListener mQueueListener = new View.OnClickListener() {
         public void onClick(View v) {
             MusicBrowserActivity.mIsparentActivityFInishing = true;
@@ -600,6 +614,115 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         return rectangle.top;
     }
 
+    private void setImageSrc(ImageView imageView, Bitmap bitmap, boolean isCircle) {
+        final boolean colorify = !isCircle;
+        RequestOptions mRequestOptions = new RequestOptions();
+        mRequestOptions.centerCrop();
+        if (isCircle)
+            mRequestOptions.circleCrop();
+        Glide
+                .with(imageView.getContext())
+                .asBitmap()
+                .load(bitmap)
+                .apply(mRequestOptions)
+                .listener(new RequestListener<Bitmap>() {
+                    @Override
+                    public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Bitmap> target, boolean isFirstResource) {
+                        return false;
+                    }
+
+                    @Override
+                    public boolean onResourceReady(Bitmap resource, Object model, Target<Bitmap> target, DataSource dataSource, boolean isFirstResource) {
+                        if (colorify)
+                            getPalette(resource);
+                        return false;
+                    }
+                })
+                .into(imageView);
+    }
+
+    private void setImageSrc(ImageView imageView, boolean isCircle) {
+        Drawable drawable = getResources().getDrawable(R.drawable.album_cover_background);
+        RequestOptions mRequestOptions = new RequestOptions();
+        mRequestOptions.centerCrop();
+        if (isCircle)
+            mRequestOptions.circleCrop();
+        Glide
+                .with(imageView.getContext())
+                .load(drawable)
+                .apply(mRequestOptions)
+                .into(imageView);
+    }
+
+    private void getPalette(Bitmap bitmap) {
+        Palette.from(bitmap).generate(palette -> {
+            if (palette != null)
+                paintEmAll(palette);
+        });
+    }
+
+    private void paintEmAll(Palette palette) {
+        PaletteParser mParser = new PaletteParser(palette);
+        @ColorInt int colorPrimary = mParser.getColorPrimary();
+        @ColorInt int colorPrimaryDark = mParser.getColorPrimaryDark();
+        @ColorInt int colorBackground = mParser.getColorBackground();
+        @ColorInt int colorControlActivated = mParser.getColorControlActivated();
+
+        AnimatorSet controlButtonSet = createCircularAnimatorSet(mControlLayout, colorPrimary);
+        controlButtonSet.start();
+
+        View headerLayout = mNowPlayingView.findViewById(R.id.header_layout);
+        AnimatorSet headerSet = createPlainAnimatorSet(headerLayout, colorPrimaryOld, colorPrimary);
+        headerSet.start();
+
+        mQueueLayout.setBackgroundColor(colorBackground);
+        mTotalTime.setTextColor(mParser.getColorTextPrimary());
+        mCurrentTime.setTextColor(mParser.getColorTextPrimary());
+        mPrevButton.setColorFilter(colorControlActivated);
+        mNextButton.setColorFilter(colorControlActivated);
+        mShuffleButton.setColorFilter(colorControlActivated);
+        mRepeatButton.setColorFilter(colorControlActivated);
+
+        TextView nameSong = headerLayout.findViewById(R.id.song_name);
+        TextView nameArtist = headerLayout.findViewById(R.id.artist_name);
+        ImageView nowPlaying = headerLayout.findViewById(R.id.nowplay_icon);
+        ImageButton playList = headerLayout.findViewById(R.id.animViewcurrPlaylist);
+        ImageButton menu3Dot = headerLayout.findViewById(R.id.menu_overflow_audio_header);
+
+        nameSong.setTextColor(mParser.getColorTextPrimary());
+        nameArtist.setTextColor(mParser.getColorTextSecondary());
+        nowPlaying.setColorFilter(colorControlActivated);
+        playList.setColorFilter(colorControlActivated);
+        menu3Dot.setColorFilter(colorControlActivated);
+
+        getWindow().setStatusBarColor(colorPrimaryDark);
+        if (ColorUtil.isColorLight(colorPrimaryDark))
+            ViewUtil.restoreStatusBarMods(getWindow());
+        else
+            ViewUtil.clearStatusBarMods(getWindow());
+        colorPrimaryOld = colorPrimary;
+    }
+
+    private AnimatorSet createCircularAnimatorSet(View view, @ColorInt int colorNew) {
+        int x = (int) (mControlLayout.getWidth() / 2);
+        int y = (int) (mControlLayout.getHeight() / 2);
+        float startRadius = mPauseButton.getWidth();
+        float endRadius = mControlLayout.getHeight();
+        view.setBackgroundColor(colorNew);
+        Animator backgroundAnimator = ViewAnimationUtils.createCircularReveal(view, x, y, startRadius, endRadius);
+        AnimatorSet animatorSet = new AnimatorSet();
+        animatorSet.play(backgroundAnimator);
+        return animatorSet;
+    }
+
+    private AnimatorSet createPlainAnimatorSet(View v, @ColorInt int colorOld, @ColorInt int colorNew) {
+        v.setBackgroundColor(colorNew);
+        Animator backgroundAnimator = ViewUtil.createBackgroundColorTransition(v, colorOld, colorNew);
+        AnimatorSet animatorSet = new AnimatorSet();
+        animatorSet.play(backgroundAnimator);
+        return animatorSet;
+    }
+
     public View getNowPlayingView() {
         return mNowPlayingView;
     }
@@ -652,6 +775,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         SysApplication.getInstance().addActivity(this);
         mLyricAdapter = new LyricAdapter(this);
         mAudioPlayerBody = findViewById(R.id.audio_player_body);
+        mControlLayout = findViewById(R.id.control_layout);
         initAudioPlayerBodyView();
     }
 
@@ -695,14 +819,11 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         mLyricView.setSelection(mFirstVisibleItem);
         mLyricView.setOnScrollListener(this);
         mLyricIcon = findViewById(R.id.lyric);
-        mLyricIcon.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (mIsLyricDisplay) {
-                    hideLyric();
-                } else {
-                    showLyric();
-                }
+        mLyricIcon.setOnClickListener(v -> {
+            if (mIsLyricDisplay) {
+                hideLyric();
+            } else {
+                showLyric();
             }
         });
         mLandControlPanel = findViewById(R.id.land_control_panel);
@@ -952,7 +1073,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
 
     private int getMemberId(int playlistId, long id) {
         Uri uri = MediaStore.Audio.Playlists.Members.getContentUri(
-                "external", Long.valueOf(playlistId));
+                "external", (long) playlistId);
 
         StringBuilder where = new StringBuilder();
         where.append(MediaStore.Audio.Playlists.Members.AUDIO_ID + " = ");
@@ -961,22 +1082,16 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         String[] mCursorCols = new String[]{
                 MediaStore.Audio.Playlists.Members._ID
         };
-        Cursor cursor = null;
         int memberId = -1;
         if (playlistId == -1) {
             return memberId;
         }
-        try {
-            cursor = getContentResolver().query(uri, mCursorCols, where.toString(), null, null);
+        try (Cursor cursor = getContentResolver().query(uri, mCursorCols, where.toString(), null, null)) {
             if (cursor != null && cursor.getCount() > 0) {
                 cursor.moveToFirst();
                 memberId = cursor.getInt(0);
             }
         } catch (Exception e) {
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
         }
 
         return memberId;
@@ -1108,6 +1223,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
     public void onResume() {
         super.onResume();
         mActivity = this;
+        ViewUtil.clearStatusBarMods(getWindow());
         updateNowPlaying(this);
         updateTrackInfo();
         queueNextRefreshForLyric(REFRESH_MILLIONS);
@@ -1255,48 +1371,39 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
             return;
         }
         switch (requestCode) {
-            case NEW_PLAYLIST:
-                if (resultCode == RESULT_OK) {
-                    long songID = -1;
-                    Uri uri = intent.getData();
-                    try {
-                        if (mService != null) {
-                            songID = mService.getAudioId();
-                            if (songID != -1) {
-                                if (uri != null) {
-                                    long[] list = new long[]{songID};
-                                    int playlist = Integer.parseInt(uri
-                                            .getLastPathSegment());
-                                    MusicUtils.addToPlaylist(this, list, playlist);
-                                }
-                            } else {
-                                Log.e(TAG, "Audio ID is -1");
+            case NEW_PLAYLIST: {
+                long songID = -1;
+                Uri uri = intent.getData();
+                try {
+                    if (mService != null) {
+                        songID = mService.getAudioId();
+                        if (songID != -1) {
+                            if (uri != null) {
+                                long[] list = new long[]{songID};
+                                int playlist = Integer.parseInt(uri
+                                        .getLastPathSegment());
+                                MusicUtils.addToPlaylist(this, list, playlist);
                             }
+                        } else {
+                            Log.e(TAG, "Audio ID is -1");
                         }
-                    } catch (RemoteException e) {
-                        Log.e(TAG, "Remote Exception is caught");
                     }
+                } catch (RemoteException e) {
+                    Log.e(TAG, "Remote Exception is caught");
                 }
-                break;
+            }
+            break;
             case SAVE_AS_PLAYLIST:
-                if (resultCode == RESULT_OK) {
-                    Uri uri = intent.getData();
-                    if (uri != null) {
-                        Cursor c = null;
-                        try {
-                            c = updateTrackCursor();
-                            if (c != null) {
-                                long[] list = MusicUtils
-                                        .getSongListForCursor(c);
-                                int plid = Integer.parseInt(uri.getLastPathSegment());
-                                MusicUtils.addToPlaylist(this, list, plid);
-                            }
-                        } catch (Exception e) {
-                        } finally {
-                            if (c != null) {
-                                c.close();
-                            }
+                Uri uri = intent.getData();
+                if (uri != null) {
+                    try (Cursor c = updateTrackCursor()) {
+                        if (c != null) {
+                            long[] list = MusicUtils
+                                    .getSongListForCursor(c);
+                            int plid = Integer.parseInt(uri.getLastPathSegment());
+                            MusicUtils.addToPlaylist(this, list, plid);
                         }
+                    } catch (Exception e) {
                     }
                 }
                 break;
