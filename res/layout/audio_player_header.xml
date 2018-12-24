@@ -31,7 +31,6 @@
     android:layout_width="match_parent"
     android:layout_height="@dimen/layout_header_height"
     android:layout_gravity="top"
-    android:elevation="3dp"
     android:orientation="horizontal">
 
     <ImageView
@@ -54,9 +53,8 @@
             android:id="@+id/song_name"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:alpha="0.87"
             android:ellipsize="marquee"
-            android:fontFamily="sans-serif"
+            android:textColor="@color/colorTextPrimary"
             android:marqueeRepeatLimit="marquee_forever"
             android:singleLine="true"
             android:textSize="16sp" />
@@ -65,12 +63,11 @@
             android:id="@+id/artist_name"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:alpha="0.54"
             android:ellipsize="marquee"
-            android:fontFamily="sans-serif"
+            android:textColor="@color/colorTextSecondary"
             android:marqueeRepeatLimit="marquee_forever"
             android:maxLength="28"
-            android:textSize="13sp" />
+            android:textSize="12sp" />
     </LinearLayout>
 
     <LinearLayout

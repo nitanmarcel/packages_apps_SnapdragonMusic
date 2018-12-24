@@ -17,12 +17,13 @@
 
 <resources>
 
-    <color name="colorAccent">#F57F17</color>
+    <color name="colorAccent">#FF6050</color>
+    <color name="colorAccentTranslucent">#88FF6050</color>
     <color name="colorPrimary">#FFF</color>
     <color name="colorPrimaryDark">#EEE</color>
     <color name="colorBackground">#FAFAFA</color>
 
-    <color name="colorTextPrimary">#242424</color>
+    <color name="colorTextPrimary">#141414</color>
     <color name="colorTextSecondary">#545454</color>
 
     <color name="colorWhite">#FFF</color>

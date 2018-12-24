@@ -81,4 +81,16 @@
 
     <style name="CustomPopupMenu" parent="@android:style/Widget.Holo.Light.ListPopupWindow" />
 
+    <style name="MusicProgressSliderParent">
+        <item name="android:progressDrawable">@android:color/transparent</item>
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:thumb">@drawable/slider_thumb</item>
+    </style>
+
+    <style name="MusicProgressSlider" parent="MusicProgressSliderParent">
+        <item name="android:thumbOffset">0dp</item>
+    </style>
+
+
 </resources>

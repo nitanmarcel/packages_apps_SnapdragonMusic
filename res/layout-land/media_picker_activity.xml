@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
+<?xml version="1.0" encoding="utf-8"?><!--
      Copyright (C) 2007 The Android Open Source Project
 
      Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,50 +17,44 @@
 <android.support.design.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:id="@+id/layout"
     android:orientation="vertical"
-    tools:context="com.android.music.MusicBrowserActivity"
-    android:background="@android:color/white">
+    tools:context="com.android.music.MusicBrowserActivity">
 
     <LinearLayout
-         android:layout_width="match_parent"
-         android:layout_height="match_parent"
-         android:orientation="vertical"
-         xmlns:android="http://schemas.android.com/apk/res/android"
-         xmlns:tools="http://schemas.android.com/tools"
-         xmlns:app="http://schemas.android.com/apk/res-auto"
-         tools:context="com.android.music.MusicBrowserActivity"
-         app:layout_behavior="@string/appbar_scrolling_view_behavior">
-         <com.codeaurora.music.custom.TouchInterceptorScrollView
-              android:id="@+id/media_list"
-              android:layout_width="match_parent"
-              android:layout_height="wrap_content"
-              android:background="@android:color/white"
-              android:divider="@android:color/white"
-              android:orientation="vertical"
-              android:fastScrollEnabled="true"
-              android:drawSelectorOnTop="true"
-              android:dividerHeight="0dp"
-              android:textSize="18sp" >
-          </com.codeaurora.music.custom.TouchInterceptorScrollView>
-          <android.support.v4.widget.NestedScrollView
-              android:layout_width="match_parent"
-              android:layout_height="match_parent">
-              <View
-                 android:layout_width="match_parent"
-                 android:layout_height="match_parent">
-              </View>
-          </android.support.v4.widget.NestedScrollView>
-     </LinearLayout>
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior"
+        tools:context="com.android.music.MusicBrowserActivity">
+
+        <com.codeaurora.music.custom.TouchInterceptorScrollView
+            android:id="@+id/media_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:dividerHeight="0dp"
+            android:drawSelectorOnTop="true"
+            android:fastScrollEnabled="true"
+            android:orientation="vertical"
+            android:textSize="18sp" />
+
+        <android.support.v4.widget.NestedScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+        </android.support.v4.widget.NestedScrollView>
+    </LinearLayout>
 
     <android.support.design.widget.AppBarLayout
-        android:layout_height="wrap_content"
+        android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:fitsSystemWindows="true"
-        android:theme="@style/ToolbarTheme"
-        android:id="@+id/toolbar">
+        android:layout_height="wrap_content"
+        android:fitsSystemWindows="true">
 
         <android.support.design.widget.CollapsingToolbarLayout
             android:layout_width="match_parent"
@@ -70,19 +63,17 @@
 
             <android.support.v4.widget.NestedScrollView
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" >
+                android:layout_height="wrap_content">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:background="@android:color/white"
-                    android:orientation="vertical" >
+                    android:orientation="vertical">
 
                     <FrameLayout
                         android:layout_width="match_parent"
-                        android:layout_height="80dp"
-                        android:paddingTop="20dp"
-                        android:background="@color/colorAccent">
+                        android:layout_height="?actionBarSize"
+                        android:paddingTop="20dp">
 
                         <ImageView
                             android:id="@+id/imageView2"
@@ -129,24 +120,20 @@
                                     android:id="@+id/textView1"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:alpha="0.75"
                                     android:ellipsize="marquee"
                                     android:fontFamily="sans-serif"
                                     android:singleLine="true"
                                     android:text="@string/action_settings1"
-                                    android:textColor="#000000"
                                     android:textSize="20sp" />
 
                                 <TextView
                                     android:id="@+id/textView2"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:alpha="0.50"
                                     android:ellipsize="end"
                                     android:fontFamily="sans-serif"
                                     android:singleLine="true"
                                     android:text="@string/action_one"
-                                    android:textColor="#000000"
                                     android:textSize="16sp" />
                             </LinearLayout>
 
@@ -155,8 +142,8 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_gravity="end|center_vertical"
-                                android:layout_marginEnd="10dp"
                                 android:layout_marginStart="10dp"
+                                android:layout_marginEnd="10dp"
                                 android:src="@drawable/ic_menu_moreoverflow_normal_holo_light" />
                         </LinearLayout>
 
@@ -170,10 +157,10 @@
                             android:id="@+id/imageView4"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_alignEnd="@+id/linearLayout"
                             android:layout_below="@+id/linearLayout"
-                            android:layout_marginEnd="36dp"
+                            android:layout_alignEnd="@+id/linearLayout"
                             android:layout_marginTop="-40dp"
+                            android:layout_marginEnd="36dp"
                             android:src="@drawable/floating_play" />
                     </RelativeLayout>
                 </LinearLayout>

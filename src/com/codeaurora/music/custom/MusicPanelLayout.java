@@ -410,13 +410,6 @@ public class MusicPanelLayout extends ViewGroup {
                 }
 
                 w -= lp.leftMargin + lp.rightMargin;
-            } else if (mSlippingView == childView) {
-                int statusBarHeight = MediaPlaybackActivity.getStatusBarHeight();
-                // Do NOT need to reduce status bar height if we're in the bottom
-                // window of split screen
-                if (statusBarHeight < WINDOW_TOP_OF_BOTTOM_SPLIT_SCREEN) {
-                    h = h - statusBarHeight;
-                }
             }
             int childWSpec;
             if (lp.width == MusicScreenParams.WRAP_CONTENT) {

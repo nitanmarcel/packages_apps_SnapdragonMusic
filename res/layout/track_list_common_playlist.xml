@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
+<?xml version="1.0" encoding="utf-8"?><!--
   Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -32,48 +31,54 @@
     android:layout_width="wrap_content"
     android:layout_height="@dimen/iconlayoutheight"
     android:layout_marginStart="4dp"
-    android:layout_marginEnd="4dp"
     android:layout_marginTop="8dp"
-    android:background="@drawable/card_background"
+    android:layout_marginEnd="4dp"
+    android:background="@color/colorBackground"
+    android:elevation="2dp"
     android:orientation="vertical"
-    android:scaleType="fitXY" >
+    android:scaleType="fitXY">
 
     <TableLayout
         android:id="@+id/relativeLayout1"
         android:layout_width="match_parent"
-        android:layout_marginTop="1dp"
-        android:layout_marginRight="1dp"
+        android:layout_height="@dimen/iconlayoutwidth"
         android:layout_marginLeft="1dp"
-        android:layout_height="@dimen/iconlayoutwidth">
+        android:layout_marginTop="1dp"
+        android:layout_marginRight="1dp">
+
         <TableRow>
+
             <ImageView
                 android:id="@+id/icon"
                 android:layout_width="@dimen/icontile"
-                android:layout_height="@dimen/icontile"
-                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:minHeight="160dp"
                 android:layout_margin="2dp"
-                android:scaleType="fitXY"
+                android:layout_weight="1"
+                android:scaleType="centerCrop"
                 android:src="@drawable/album_cover" />
 
             <ImageView
                 android:id="@+id/icon1"
                 android:layout_width="@dimen/icontile"
-                android:layout_height="@dimen/icontile"
-                android:layout_weight="1"
+                android:layout_height="wrap_content"
                 android:layout_margin="2dp"
                 android:layout_toEndOf="@+id/icon"
-                android:scaleType="fitXY"
-                android:src="@drawable/album_cover" />
+                android:layout_weight="1"
+                android:scaleType="centerCrop"
+                android:src="@drawable/album_cover"
+                android:visibility="gone" />
         </TableRow>
 
-        <TableRow>
+        <TableRow android:visibility="gone">
+
             <ImageView
                 android:id="@+id/icon2"
                 android:layout_width="@dimen/icontile"
                 android:layout_height="@dimen/icontile"
-                android:layout_weight="1"
                 android:layout_below="@+id/icon"
                 android:layout_margin="2dp"
+                android:layout_weight="1"
                 android:scaleType="fitXY"
                 android:src="@drawable/album_cover" />
 
@@ -81,8 +86,8 @@
                 android:id="@+id/icon3"
                 android:layout_width="@dimen/icontile"
                 android:layout_height="@dimen/icontile"
-                android:layout_weight="1"
                 android:layout_margin="2dp"
+                android:layout_weight="1"
                 android:scaleType="fitXY"
                 android:src="@drawable/album_cover" />
         </TableRow>
@@ -92,23 +97,20 @@
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="-6dp"
-        android:layout_below="@+id/relativeLayout1" >
+        android:layout_below="@+id/relativeLayout1"
+        android:layout_marginTop="-6dp">
 
         <TextView
             android:id="@+id/line1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignParentStart="true"
-            android:layout_toStartOf="@+id/play_indicator"
-            android:alpha="0.87"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif"
-            android:paddingStart="14dp"
             android:layout_marginTop="@dimen/iconpaddingtop"
+            android:layout_toStartOf="@+id/play_indicator"
+            android:ellipsize="end"
+            android:paddingStart="14dp"
             android:singleLine="true"
             android:text="@string/albums_menu"
-            android:textColor="#000000"
             android:textSize="16sp" />
 
         <ImageView

@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
+<?xml version="1.0" encoding="utf-8"?><!--
   Copyright (c) 2015, The Linux Foundation. All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -31,7 +30,8 @@
     android:layout_width="match_parent"
     android:layout_height="220dp"
     android:layout_marginTop="@dimen/album_list_space"
-    android:background="@drawable/card_background">
+    android:elevation="2dp"
+    android:background="@color/colorBackground">
 
     <include layout="@layout/track_list_item_common_album" />
 

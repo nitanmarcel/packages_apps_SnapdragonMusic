@@ -1671,7 +1671,7 @@ public class MusicUtils {
                     image.setVisibility(View.VISIBLE);
                     currPlaylist.setVisibility(View.GONE);
                     overflow.setVisibility(View.GONE);
-                    layout.setBackgroundResource(R.drawable.playingbar_bg);
+                    layout.setBackgroundResource(R.drawable.playingbar_bg_rev);
                     title.setSelected(false);
                     if (isPlaying()) {
                         image.setImageResource(R.drawable.play_pause);
