@@ -16,23 +16,18 @@
 
 package com.android.music;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Fragment;
 import android.content.AsyncQueryHandler;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
-import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.res.Configuration;
-import android.content.res.Resources;
 import android.database.Cursor;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.drawable.BitmapDrawable;
-import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -46,46 +41,42 @@ import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
-import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.AdapterView.OnItemClickListener;
-import android.widget.AlphabetIndexer;
-import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.PopupMenu;
-import android.widget.PopupMenu.OnMenuItemClickListener;
-import android.widget.SectionIndexer;
-import android.widget.SimpleCursorAdapter;
 import android.widget.TextView;
 
 import com.android.music.MusicUtils.Defs;
 import com.android.music.MusicUtils.ServiceToken;
+import com.android.music.adapters.FolderListAdapter;
 
 public class FolderBrowserFragment extends Fragment
         implements View.OnCreateContextMenuListener, MusicUtils.Defs, ServiceConnection, OnItemClickListener {
-    private static String mCurretParent;
-    private static String mCurrentPath;
-    private static int mLastListPosCourse = -1;
-    private static int mLastListPosFine = -1;
-    private static Cursor mFilesCursor;
-    private static SubMenu mSub = null;
+    public static String mCurrentParent;
+    public static String mCurrentPath;
+    public static int mLastListPosCourse = -1;
+    public static int mLastListPosFine = -1;
+    public static Cursor mFilesCursor;
+    public static SubMenu mSub = null;
     public PopupMenu mPopupMenu;
-    private FolderListAdapter mAdapter;
-    private boolean mAdapterSent;
-    private ServiceToken mToken;
-    private TextView mSdErrorMessageView;
-    private View mSdErrorMessageIcon;
-    private ListView mFolderList;
-    private MediaPlaybackActivity mActivity;
-    private BroadcastReceiver mTrackListListener = new BroadcastReceiver() {
+    public boolean mAdapterSent;
+    public TextView mSdErrorMessageView;
+    public View mSdErrorMessageIcon;
+    public ListView mFolderList;
+    public MediaPlaybackActivity mActivity;
+    public BroadcastReceiver mTrackListListener = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             mFolderList.invalidateViews();
             mActivity.updateNowPlaying(mActivity);
         }
     };
+    private FolderListAdapter mAdapter;
+    private ServiceToken mToken;
+    @SuppressLint("HandlerLeak")
     private Handler mReScanHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
@@ -162,14 +153,14 @@ public class FolderBrowserFragment extends Fragment
     public void onCreate(Bundle icicle) {
         super.onCreate(icicle);
         if (icicle != null) {
-            mCurretParent = icicle.getString("selectedParent");
+            mCurrentParent = icicle.getString("selectedParent");
         }
         mToken = MusicUtils.bindToService(mActivity, this);
     }
 
     @Override
     public void onSaveInstanceState(Bundle outcicle) {
-        outcicle.putString("selectedParent", mCurretParent);
+        outcicle.putString("selectedParent", mCurrentParent);
         super.onSaveInstanceState(outcicle);
     }
 
@@ -324,7 +315,7 @@ public class FolderBrowserFragment extends Fragment
         MusicUtils.makePlaylistMenu(mActivity, mSub);
         AdapterContextMenuInfo mi = (AdapterContextMenuInfo) menuInfoIn;
         mFilesCursor.moveToPosition(mi.position);
-        mCurretParent = mFilesCursor.getString(mFilesCursor
+        mCurrentParent = mFilesCursor.getString(mFilesCursor
                 .getColumnIndexOrThrow(MediaStore.Files.FileColumns.PARENT));
         mCurrentPath = mFilesCursor.getString(mFilesCursor
                 .getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA));
@@ -335,13 +326,13 @@ public class FolderBrowserFragment extends Fragment
     public boolean onContextItemSelected(MenuItem item) {
         switch (item.getItemId()) {
             case PLAY_SELECTION: {
-                long[] list = MusicUtils.getSongListForFolder(mActivity, Long.parseLong(mCurretParent));
+                long[] list = MusicUtils.getSongListForFolder(mActivity, Long.parseLong(mCurrentParent));
                 MusicUtils.playAll(mActivity, list, 0);
                 return true;
             }
 
             case QUEUE: {
-                long[] list = MusicUtils.getSongListForFolder(mActivity, Long.parseLong(mCurretParent));
+                long[] list = MusicUtils.getSongListForFolder(mActivity, Long.parseLong(mCurrentParent));
                 MusicUtils.addToCurrentPlaylist(mActivity, list);
                 MusicUtils.addToPlaylist(mActivity, list, MusicUtils.getPlayListId());
                 return true;
@@ -356,7 +347,7 @@ public class FolderBrowserFragment extends Fragment
 
             case PLAYLIST_SELECTED: {
                 long[] list = MusicUtils
-                        .getSongListForFolder(mActivity, Long.parseLong(mCurretParent));
+                        .getSongListForFolder(mActivity, Long.parseLong(mCurrentParent));
                 long playlist = item.getIntent().getLongExtra("playlist", 0);
                 MusicUtils.addToPlaylist(mActivity, list, playlist);
                 return true;
@@ -381,7 +372,7 @@ public class FolderBrowserFragment extends Fragment
                     Uri uri = intent.getData();
                     if (uri != null) {
                         long[] list = MusicUtils.getSongListForFolder(mActivity,
-                                Long.parseLong(mCurretParent));
+                                Long.parseLong(mCurrentParent));
                         MusicUtils.addToPlaylist(mActivity, list,
                                 Long.parseLong(uri.getLastPathSegment()));
                     }
@@ -431,7 +422,7 @@ public class FolderBrowserFragment extends Fragment
         MusicUtils.navigatingTabPosition = 3;
     }
 
-    private Cursor getFolderCursor(AsyncQueryHandler async, String filter) {
+    public Cursor getFolderCursor(AsyncQueryHandler async, String filter) {
         Cursor ret = null;
         String uriString = "content://media/external/file";
         String selection = "is_music = 1 & 1=1 ) GROUP BY (parent";
@@ -469,207 +460,5 @@ public class FolderBrowserFragment extends Fragment
         getFragmentManager().beginTransaction()
                 .replace(R.id.fragment_page, fragment, "folder_fragment")
                 .commitAllowingStateLoss();
-    }
-
-    class FolderListAdapter extends SimpleCursorAdapter implements SectionIndexer {
-
-        private final BitmapDrawable mDefaultAlbumIcon;
-        private final Resources mResources;
-        private final String mUnknownPath;
-        private final String mUnknownCount;
-        private final Object[] mFormatArgs = new Object[1];
-        private Drawable mNowPlaying;
-        private int mDataIdx;
-        private int mCountIdx;
-        private AlphabetIndexer mIndexer;
-        private FolderBrowserFragment mFragment;
-        private AsyncQueryHandler mQueryHandler;
-        private String mConstraint = null;
-        private boolean mConstraintIsValid = false;
-
-        FolderListAdapter(Context context, FolderBrowserFragment currentfragment,
-                          int layout, Cursor cursor, String[] from, int[] to) {
-            super(context, layout, cursor, from, to);
-
-            mFragment = currentfragment;
-            mQueryHandler = new QueryHandler(context.getContentResolver());
-            mUnknownPath = context.getString(R.string.unknown_folder_name);
-            mUnknownCount = context.getString(R.string.unknown_folder_count);
-            Resources r = context.getResources();
-            mNowPlaying = r.getDrawable(R.drawable.indicator_ic_mp_playing_list);
-            Bitmap b = BitmapFactory.decodeResource(r, R.drawable.album_cover_background);
-            mDefaultAlbumIcon = new BitmapDrawable(context.getResources(), b);
-            mDefaultAlbumIcon.setFilterBitmap(false);
-            mDefaultAlbumIcon.setDither(false);
-            getColumnIndices(cursor);
-            mResources = context.getResources();
-        }
-
-        private void getColumnIndices(Cursor cursor) {
-            if (cursor != null) {
-                mDataIdx = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA);
-                mCountIdx = cursor.getColumnIndexOrThrow("count(*)");
-                if (mIndexer != null) {
-                    mIndexer.setCursor(cursor);
-                } else {
-                    mIndexer = new MusicAlphabetIndexer(cursor, mDataIdx, mResources.getString(
-                            R.string.fast_scroll_alphabet));
-                }
-            }
-        }
-
-        public void setActivity(FolderBrowserFragment newfragment) {
-            mFragment = newfragment;
-        }
-
-        public AsyncQueryHandler getQueryHandler() {
-            return mQueryHandler;
-        }
-
-        @Override
-        public View newView(Context context, Cursor cursor, ViewGroup parent) {
-            View v = super.newView(context, cursor, parent);
-            ViewHolder vh = new ViewHolder();
-            vh.line1 = v.findViewById(R.id.line1);
-            vh.line2 = v.findViewById(R.id.line2);
-            vh.play_indicator = v.findViewById(R.id.play_indicator);
-            View animView = v.findViewById(R.id.animView);
-            animView.setVisibility(View.GONE);
-            //vh.icon = (ImageView) v.findViewById(R.id.icon);
-            //vh.icon.setBackgroundDrawable(mDefaultAlbumIcon);
-            //vh.icon.setPadding(0, 0, 1, 0);
-            v.setTag(vh);
-            return v;
-        }
-
-        @Override
-        public void bindView(View view, Context context, final Cursor cursor) {
-            final ViewHolder vh = (ViewHolder) view.getTag();
-
-            String path = cursor.getString(mDataIdx);
-            String rootPath = getRootPath(path);
-            String name;
-            if (path == null || path.trim().equals("")) {
-                name = mUnknownPath;
-            } else {
-                String[] split = rootPath.split("/");
-                name = split[split.length - 1];
-            }
-            vh.line1.setText(name);
-
-            String numString = mUnknownCount;
-            int count = cursor.getInt(mCountIdx);
-            if (count == 1) {
-                numString = context.getString(R.string.onesong);
-            } else {
-                final Object[] args = mFormatArgs;
-                args[0] = count;
-                numString = mResources.getQuantityString(R.plurals.Nsongs, count, args);
-            }
-
-            final int p = cursor.getPosition();
-            vh.line2.setText(numString);
-
-            vh.play_indicator.setOnClickListener(new OnClickListener() {
-
-                @Override
-                public void onClick(View v) {
-                    // mFragment.mCurrentAlbumName = vh.mCurrentAlbumName;
-                    if (mFragment.mPopupMenu != null) {
-                        mFragment.mPopupMenu.dismiss();
-                    }
-                    PopupMenu popup = new PopupMenu(mFragment
-                            .getParentActivity(), vh.play_indicator);
-                    popup.getMenu().add(0, PLAY_SELECTION, 0,
-                            R.string.play_selection);
-                    mSub = popup.getMenu().addSubMenu(0,
-                            ADD_TO_PLAYLIST, 0, R.string.add_to_playlist);
-                    MusicUtils.makePlaylistMenu(mFragment.getParentActivity(),
-                            mSub);
-
-                    popup.show();
-                    popup.setOnMenuItemClickListener(new OnMenuItemClickListener() {
-
-                        @Override
-                        public boolean onMenuItemClick(MenuItem item) {
-                            mFragment.onContextItemSelected(item);
-                            return true;
-                        }
-                    });
-                    mFragment.mPopupMenu = popup;
-
-                    mFilesCursor.moveToPosition(p);
-                    mCurretParent = mFilesCursor.getString(mFilesCursor
-                            .getColumnIndexOrThrow(MediaStore.Files.FileColumns.PARENT));
-                    mCurrentPath = mFilesCursor.getString(mFilesCursor
-                            .getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA));
-                }
-            });
-        }
-
-        @Override
-        public void changeCursor(Cursor cursor) {
-            if (mFragment.getParentActivity() != null
-                    && mFragment.getParentActivity().isFinishing()
-                    && cursor != null) {
-                cursor.close();
-                cursor = null;
-            }
-            if (cursor != mFilesCursor) {
-                if (mFilesCursor != null) {
-                    mFilesCursor.close();
-                    mFilesCursor = null;
-                }
-                mFilesCursor = cursor;
-                if (cursor == null || !cursor.isClosed()) {
-                    getColumnIndices(cursor);
-                    super.changeCursor(cursor);
-                }
-            }
-        }
-
-        @Override
-        public Cursor runQueryOnBackgroundThread(CharSequence constraint) {
-            String s = constraint.toString();
-            if (mConstraintIsValid && (
-                    (s == null && mConstraint == null) ||
-                            (s != null && s.equals(mConstraint)))) {
-                return getCursor();
-            }
-            Cursor c = mFragment.getFolderCursor(null, s);
-            mConstraint = s;
-            mConstraintIsValid = true;
-            return c;
-        }
-
-        public Object[] getSections() {
-            return mIndexer.getSections();
-        }
-
-        public int getPositionForSection(int section) {
-            return mIndexer.getPositionForSection(section);
-        }
-
-        public int getSectionForPosition(int position) {
-            return 0;
-        }
-
-        class ViewHolder {
-            TextView line1;
-            TextView line2;
-            ImageView play_indicator;
-            ImageView icon;
-        }
-
-        class QueryHandler extends AsyncQueryHandler {
-            QueryHandler(ContentResolver res) {
-                super(res);
-            }
-
-            @Override
-            protected void onQueryComplete(int token, Object cookie, Cursor cursor) {
-                mFragment.init(cursor);
-            }
-        }
     }
 }

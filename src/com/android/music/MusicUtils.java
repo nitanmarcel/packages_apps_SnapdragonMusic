@@ -1253,7 +1253,7 @@ public class MusicUtils {
                 null, opts);
     }
 
-    static int getIntPref(Context context, String name, int def) {
+    public static int getIntPref(Context context, String name, int def) {
         SharedPreferences prefs =
                 context.getSharedPreferences(context.getPackageName(), Context.MODE_PRIVATE);
         return prefs.getInt(name, def);
@@ -2173,7 +2173,7 @@ public class MusicUtils {
         }
     }
 
-    static class FolderBitmapThread extends Thread {
+    public static class FolderBitmapThread extends Thread {
 
         // Handler handler = null;
         BitmapDrawable defaultArtwork;

@@ -19,25 +19,19 @@
 
 package com.android.music;
 
-import android.annotation.ColorInt;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Fragment;
 import android.app.SearchManager;
 import android.content.AsyncQueryHandler;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
-import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.res.Configuration;
-import android.content.res.Resources;
 import android.database.Cursor;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.drawable.BitmapDrawable;
-import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -45,8 +39,6 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.provider.MediaStore;
-import android.support.annotation.Nullable;
-import android.support.v7.graphics.Palette;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
@@ -56,51 +48,40 @@ import android.view.ViewGroup;
 import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
-import android.widget.AlphabetIndexer;
 import android.widget.GridView;
-import android.widget.ImageView;
 import android.widget.PopupMenu;
-import android.widget.PopupMenu.OnMenuItemClickListener;
-import android.widget.RelativeLayout;
-import android.widget.SectionIndexer;
-import android.widget.SimpleCursorAdapter;
 import android.widget.TextView;
 
 import com.android.music.MusicUtils.Defs;
 import com.android.music.MusicUtils.ServiceToken;
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.DataSource;
-import com.bumptech.glide.load.engine.DiskCacheStrategy;
-import com.bumptech.glide.load.engine.GlideException;
-import com.bumptech.glide.load.resource.bitmap.BitmapTransitionOptions;
-import com.bumptech.glide.request.RequestListener;
-import com.bumptech.glide.request.RequestOptions;
-import com.bumptech.glide.request.target.Target;
+import com.android.music.adapters.AlbumListAdapter;
 
 public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
         ServiceConnection {
     private final static int SEARCH = CHILD_MENU_BASE;
+    public static SubMenu mSub = null;
     private static int mLastListPosCourse = -1;
     @SuppressWarnings("unused")
     private static int mLastListPosFine = -1;
     private static int mLastSelectedPosition = -1;
-    private static SubMenu mSub = null;
     public PopupMenu mPopupMenu;
-    boolean mIsUnknownArtist;
-    boolean mIsUnknownAlbum;
-    private String mCurrentAlbumId;
-    private String mCurrentAlbumName;
-    private String mCurrentArtistNameForAlbum;
-    private AlbumListAdapter mAdapter;
-    private boolean mAdapterSent;
-    private ServiceToken mToken;
-    private GridView mAlbumList;
-    private TextView mSdErrorMessageView;
-    private View mSdErrorMessageIcon;
-    private MediaPlaybackActivity mParentActivity;
-    private Cursor mAlbumCursor;
-    private String mArtistId;
-    private Handler mReScanHandler = new Handler() {
+    public String mCurrentAlbumId;
+    public String mCurrentAlbumName;
+    public String mCurrentArtistNameForAlbum;
+    public AlbumListAdapter mAdapter;
+    public boolean mAdapterSent;
+    public ServiceToken mToken;
+    public GridView mAlbumList;
+    public TextView mSdErrorMessageView;
+    public View mSdErrorMessageIcon;
+    public MediaPlaybackActivity mParentActivity;
+    public Cursor mAlbumCursor;
+    public String mArtistId;
+    public boolean mIsUnknownArtist;
+    public boolean mIsUnknownAlbum;
+
+    @SuppressLint("HandlerLeak")
+    public Handler mReScanHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
             if (mAdapter != null) {
@@ -192,7 +173,7 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
         return rootView;
     }
 
-    private void enterAlbum(long albumID) {
+    public void enterAlbum(long albumID) {
         mParentActivity.findViewById(R.id.music_tool_bar)
                 .setVisibility(View.GONE);
         Fragment fragment = new TrackBrowserActivityFragment();
@@ -435,7 +416,7 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
         }
     }
 
-    private Cursor getAlbumCursor(AsyncQueryHandler async, String filter) {
+    public Cursor getAlbumCursor(AsyncQueryHandler async, String filter) {
         String[] cols = new String[]{MediaStore.Audio.Albums._ID,
                 MediaStore.Audio.Albums.ARTIST, MediaStore.Audio.Albums.ALBUM,
                 MediaStore.Audio.Albums.ALBUM_ART};
@@ -488,31 +469,35 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
             message = R.string.sdcard_error_message_nosdcard;
         }
 
-        if (status.equals(Environment.MEDIA_SHARED)
-                || status.equals(Environment.MEDIA_UNMOUNTED)) {
-            if (android.os.Environment.isExternalStorageRemovable()) {
-                title = R.string.sdcard_busy_title;
-                message = R.string.sdcard_busy_message;
-            } else {
-                title = R.string.sdcard_busy_title_nosdcard;
-                message = R.string.sdcard_busy_message_nosdcard;
-            }
-        } else if (status.equals(Environment.MEDIA_REMOVED)) {
-            if (android.os.Environment.isExternalStorageRemovable()) {
-                title = R.string.sdcard_missing_title;
-                message = R.string.sdcard_missing_message;
-            } else {
-                title = R.string.sdcard_missing_title_nosdcard;
-                message = R.string.sdcard_missing_message_nosdcard;
-            }
-        } else if (status.equals(Environment.MEDIA_MOUNTED)) {
-            // The card is mounted, but we didn't get a valid cursor.
-            // This probably means the mediascanner hasn't started scanning the
-            // card yet (there is a small window of time during boot where this
-            // will happen).
-            Intent intent = new Intent();
-            intent.setClass(mParentActivity, ScanningProgress.class);
-            mParentActivity.startActivityForResult(intent, Defs.SCAN_DONE);
+        switch (status) {
+            case Environment.MEDIA_SHARED:
+            case Environment.MEDIA_UNMOUNTED:
+                if (Environment.isExternalStorageRemovable()) {
+                    title = R.string.sdcard_busy_title;
+                    message = R.string.sdcard_busy_message;
+                } else {
+                    title = R.string.sdcard_busy_title_nosdcard;
+                    message = R.string.sdcard_busy_message_nosdcard;
+                }
+                break;
+            case Environment.MEDIA_REMOVED:
+                if (Environment.isExternalStorageRemovable()) {
+                    title = R.string.sdcard_missing_title;
+                    message = R.string.sdcard_missing_message;
+                } else {
+                    title = R.string.sdcard_missing_title_nosdcard;
+                    message = R.string.sdcard_missing_message_nosdcard;
+                }
+                break;
+            case Environment.MEDIA_MOUNTED:
+                // The card is mounted, but we didn't get a valid cursor.
+                // This probably means the mediascanner hasn't started scanning the
+                // card yet (there is a small window of time during boot where this
+                // will happen).
+                Intent intent = new Intent();
+                intent.setClass(mParentActivity, ScanningProgress.class);
+                mParentActivity.startActivityForResult(intent, Defs.SCAN_DONE);
+                break;
         }
         if (mSdErrorMessageView != null) {
             mSdErrorMessageView.setVisibility(View.VISIBLE);
@@ -545,287 +530,5 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
 
     public void onServiceDisconnected(ComponentName name) {
         mParentActivity.finish();
-    }
-
-    static class AlbumListAdapter extends SimpleCursorAdapter implements
-            SectionIndexer {
-
-        private final BitmapDrawable mDefaultAlbumIcon;
-        private final Resources mResources;
-        @SuppressWarnings("unused")
-        private final StringBuilder mStringBuilder = new StringBuilder();
-        private final String mUnknownAlbum;
-        private final String mUnknownArtist;
-        @SuppressWarnings("unused")
-        private final String mAlbumSongSeparator;
-        @SuppressWarnings("unused")
-        private final Object[] mFormatArgs = new Object[1];
-        @SuppressWarnings("unused")
-        private Drawable mNowPlayingOverlay;
-        private int mAlbumIdx;
-        private int mArtistIdx;
-        private int mAlbumArtIndex;
-        private AlphabetIndexer mIndexer;
-        private AlbumBrowserFragment mFragment;
-        private AsyncQueryHandler mQueryHandler;
-        private String mConstraint = null;
-        private boolean mConstraintIsValid = false;
-        private boolean mFastscroll = false;
-
-        @SuppressWarnings("deprecation")
-        AlbumListAdapter(Context context, AlbumBrowserFragment fragment,
-                         int layout, Cursor cursor, String[] from, int[] to) {
-            super(context, layout, cursor, from, to);
-            mQueryHandler = new QueryHandler(context.getContentResolver());
-            mFragment = fragment;
-            mUnknownAlbum = context.getString(R.string.unknown_album_name);
-            mUnknownArtist = context.getString(R.string.unknown_artist_name);
-            mAlbumSongSeparator = context
-                    .getString(R.string.albumsongseparator);
-            Resources r = context.getResources();
-            mNowPlayingOverlay = r.getDrawable(R.drawable.indicator_ic_mp_playing_list);
-            Bitmap b = BitmapFactory.decodeResource(r, R.drawable.album_cover);
-            mDefaultAlbumIcon = new BitmapDrawable(context.getResources(), b);
-            // no filter or dither, it's a lot faster and we can't tell the
-            // difference
-            mDefaultAlbumIcon.setFilterBitmap(false);
-            mDefaultAlbumIcon.setDither(false);
-            getColumnIndices(cursor);
-            mResources = context.getResources();
-        }
-
-        private void getColumnIndices(Cursor cursor) {
-            if (cursor != null) {
-                mAlbumIdx = cursor
-                        .getColumnIndexOrThrow(MediaStore.Audio.Albums.ALBUM);
-                mArtistIdx = cursor
-                        .getColumnIndexOrThrow(MediaStore.Audio.Albums.ARTIST);
-                mAlbumArtIndex = cursor
-                        .getColumnIndexOrThrow(MediaStore.Audio.Albums.ALBUM_ART);
-
-                if (mIndexer != null) {
-                    mIndexer.setCursor(cursor);
-                } else {
-                    mIndexer = new MusicAlphabetIndexer(cursor, mAlbumIdx,
-                            mFragment.getParentActivity().getResources()
-                                    .getString(R.string.fast_scroll_alphabet));
-                }
-            }
-        }
-
-        public void setFragment(AlbumBrowserFragment newFragment) {
-            mFragment = newFragment;
-        }
-
-        public AsyncQueryHandler getQueryHandler() {
-            return mQueryHandler;
-        }
-
-        @SuppressWarnings("deprecation")
-        @Override
-        public View newView(Context context, Cursor cursor, ViewGroup parent) {
-            View v = super.newView(context, cursor, parent);
-            ViewHolder vh = new ViewHolder();
-            vh.line1 = v.findViewById(R.id.line1);
-            vh.line2 = v.findViewById(R.id.line2);
-            vh.popup_menu_button = v.findViewById(R.id.list_menu_button);
-            ((MediaPlaybackActivity) mFragment.getParentActivity()).setTouchDelegate(vh.popup_menu_button);
-            vh.layout = v.findViewById(R.id.album_background);
-            vh.icon = v.findViewById(R.id.icon);
-            vh.icon.setBackgroundDrawable(mDefaultAlbumIcon);
-            vh.icon.setPadding(0, 0, 0, 0);
-            v.setTag(vh);
-            return v;
-        }
-
-        @Override
-        public void bindView(View view, Context context, final Cursor cursor) {
-            final ViewHolder vh = (ViewHolder) view.getTag();
-            vh.albumID = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums._ID));
-            String name = cursor.getString(mAlbumIdx);
-            String displayname = name;
-            vh.mCurrentAlbumName = displayname;
-            vh.albumName = name;
-            boolean unknown = name == null
-                    || name.equals(MediaStore.UNKNOWN_STRING);
-            if (unknown) {
-                displayname = mUnknownAlbum;
-            }
-            vh.line1.setText(displayname);
-            name = cursor.getString(mArtistIdx);
-            vh.artistNameForAlbum = name;
-            displayname = name;
-            if (name == null || name.equals(MediaStore.UNKNOWN_STRING)) {
-                displayname = mUnknownArtist;
-            }
-            vh.line2.setText(displayname);
-            ImageView iv = vh.icon;
-            // We don't actually need the path to the thumbnail file,
-            // we just use it to see if there is album art or not
-            String art = cursor.getString(mAlbumArtIndex);
-            Bitmap[] albumArt;
-            if (art != null) {
-                albumArt = MusicUtils.mAlbumArtCache.get(art);
-            } else {
-                albumArt = null;
-            }
-            if (mFastscroll || unknown || art == null || art.length() == 0) {
-                iv.setImageDrawable(null);
-                iv.setTag(null);
-            } else {
-                if (albumArt == null || albumArt[0] == null) {
-                    Glide
-                            .with(iv.getContext())
-                            .asBitmap()
-                            .load(art)
-                            .apply(new RequestOptions()
-                                    .centerCrop()
-                                    .placeholder(R.color.colorTransparent)
-                                    .diskCacheStrategy(DiskCacheStrategy.ALL))
-                            .transition(new BitmapTransitionOptions().crossFade())
-                            .listener(new RequestListener<Bitmap>() {
-                                @Override
-                                public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Bitmap> target, boolean isFirstResource) {
-                                    return false;
-                                }
-
-                                @Override
-                                public boolean onResourceReady(Bitmap resource, Object model, Target<Bitmap> target, DataSource dataSource, boolean isFirstResource) {
-                                    getPalette(resource, vh);
-                                    return false;
-                                }
-                            })
-                            .into(iv);
-                } else {
-                    iv.setImageBitmap(albumArt[0]);
-                }
-            }
-
-            view.setOnClickListener(v -> mFragment.enterAlbum(Long.valueOf(vh.albumID)));
-
-            vh.popup_menu_button.setOnClickListener(v -> {
-                if (mFragment.mPopupMenu != null) {
-                    mFragment.mPopupMenu.dismiss();
-                }
-                mFragment.mCurrentAlbumName = vh.mCurrentAlbumName;
-                PopupMenu popup = new PopupMenu(mFragment
-                        .getParentActivity(), vh.popup_menu_button);
-                popup.getMenu().add(0, PLAY_SELECTION, 0,
-                        R.string.play_selection);
-                mSub = popup.getMenu().addSubMenu(0,
-                        ADD_TO_PLAYLIST, 0, R.string.add_to_playlist);
-                MusicUtils.makePlaylistMenu(mFragment.getParentActivity(),
-                        mSub);
-                popup.getMenu()
-                        .add(0, DELETE_ITEM, 0, R.string.delete_item);
-                popup.show();
-                popup.setOnMenuItemClickListener(new OnMenuItemClickListener() {
-
-                    @Override
-                    public boolean onMenuItemClick(MenuItem item) {
-                        // TODO Auto-generated method stub
-                        mFragment.onContextItemSelected(item);
-                        return true;
-                    }
-                });
-                mFragment.mPopupMenu = popup;
-                mFragment.mCurrentAlbumId = vh.albumID;
-                mFragment.mCurrentAlbumName = vh.albumName;
-                mFragment.mCurrentArtistNameForAlbum = vh.artistNameForAlbum;
-                mFragment.mIsUnknownArtist = mFragment.mCurrentArtistNameForAlbum == null
-                        || mFragment.mCurrentArtistNameForAlbum
-                        .equals(MediaStore.UNKNOWN_STRING);
-                mFragment.mIsUnknownAlbum = mFragment.mCurrentAlbumName == null
-                        || mFragment.mCurrentAlbumName
-                        .equals(MediaStore.UNKNOWN_STRING);
-            });
-        }
-
-        private void getPalette(Bitmap bitmap, ViewHolder vh) {
-            Palette.from(bitmap).generate(palette -> {
-                if (palette != null)
-                    paintEmAll(palette, vh);
-            });
-        }
-
-        private void paintEmAll(Palette palette, ViewHolder vh) {
-            PaletteParser mParser = new PaletteParser(palette);
-            @ColorInt int colorPrimary = mParser.getColorPrimary();
-            @ColorInt int colorTextPrimary = mParser.getColorTextPrimary();
-            @ColorInt int colorTextSecondary = mParser.getColorTextSecondary();
-            @ColorInt int colorControlActivated = mParser.getColorControlActivated();
-            vh.layout.setBackgroundColor(colorPrimary);
-            vh.line1.setTextColor(colorTextPrimary);
-            vh.line2.setTextColor(colorTextSecondary);
-            vh.popup_menu_button.setColorFilter(colorControlActivated);
-        }
-
-        @Override
-        public void changeCursor(Cursor cursor) {
-            if (mFragment.getParentActivity().isFinishing() && cursor != null) {
-                cursor.close();
-                cursor = null;
-            }
-            if (cursor != mFragment.mAlbumCursor) {
-                if (mFragment.mAlbumCursor != null) {
-                    mFragment.mAlbumCursor.close();
-                    mFragment.mAlbumCursor = null;
-                }
-                mFragment.mAlbumCursor = cursor;
-                if (cursor == null || !cursor.isClosed()) {
-                    getColumnIndices(cursor);
-                    super.changeCursor(cursor);
-                }
-            }
-        }
-
-        @Override
-        public Cursor runQueryOnBackgroundThread(CharSequence constraint) {
-            String s = constraint.toString();
-            if (mConstraintIsValid
-                    && ((s == null && mConstraint == null) || (s != null && s
-                    .equals(mConstraint)))) {
-                return getCursor();
-            }
-            Cursor c = mFragment.getAlbumCursor(null, s);
-            mConstraint = s;
-            mConstraintIsValid = true;
-            return c;
-        }
-
-        public Object[] getSections() {
-            return mIndexer.getSections();
-        }
-
-        public int getPositionForSection(int section) {
-            return mIndexer.getPositionForSection(section);
-        }
-
-        public int getSectionForPosition(int position) {
-            return 0;
-        }
-
-        static class ViewHolder {
-            TextView line1;
-            TextView line2;
-            ImageView popup_menu_button;
-            ImageView icon;
-            RelativeLayout layout;
-            String albumID;
-            String albumName;
-            String artistNameForAlbum, mCurrentAlbumName;
-        }
-
-        class QueryHandler extends AsyncQueryHandler {
-            QueryHandler(ContentResolver res) {
-                super(res);
-            }
-
-            @Override
-            protected void onQueryComplete(int token, Object cookie,
-                                           Cursor cursor) {
-                mFragment.init(cursor);
-            }
-        }
     }
 }
