@@ -19,6 +19,7 @@
 
 package com.android.music;
 
+import android.annotation.ColorInt;
 import android.app.Activity;
 import android.app.Fragment;
 import android.app.SearchManager;
@@ -38,19 +39,19 @@ import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.provider.MediaStore;
+import android.support.annotation.Nullable;
+import android.support.v7.graphics.Palette;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
-import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.widget.AbsListView;
 import android.widget.AdapterView;
@@ -60,12 +61,21 @@ import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.PopupMenu;
 import android.widget.PopupMenu.OnMenuItemClickListener;
+import android.widget.RelativeLayout;
 import android.widget.SectionIndexer;
 import android.widget.SimpleCursorAdapter;
 import android.widget.TextView;
 
 import com.android.music.MusicUtils.Defs;
 import com.android.music.MusicUtils.ServiceToken;
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import com.bumptech.glide.load.engine.GlideException;
+import com.bumptech.glide.load.resource.bitmap.BitmapTransitionOptions;
+import com.bumptech.glide.request.RequestListener;
+import com.bumptech.glide.request.RequestOptions;
+import com.bumptech.glide.request.target.Target;
 
 public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
         ServiceConnection {
@@ -573,8 +583,7 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
             mAlbumSongSeparator = context
                     .getString(R.string.albumsongseparator);
             Resources r = context.getResources();
-            mNowPlayingOverlay = r
-                    .getDrawable(R.drawable.indicator_ic_mp_playing_list);
+            mNowPlayingOverlay = r.getDrawable(R.drawable.indicator_ic_mp_playing_list);
             Bitmap b = BitmapFactory.decodeResource(r, R.drawable.album_cover);
             mDefaultAlbumIcon = new BitmapDrawable(context.getResources(), b);
             // no filter or dither, it's a lot faster and we can't tell the
@@ -619,13 +628,12 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
             ViewHolder vh = new ViewHolder();
             vh.line1 = v.findViewById(R.id.line1);
             vh.line2 = v.findViewById(R.id.line2);
-            vh.popup_menu_button = v
-                    .findViewById(R.id.list_menu_button);
-            ((MediaPlaybackActivity) mFragment.getParentActivity())
-                    .setTouchDelegate(vh.popup_menu_button);
+            vh.popup_menu_button = v.findViewById(R.id.list_menu_button);
+            ((MediaPlaybackActivity) mFragment.getParentActivity()).setTouchDelegate(vh.popup_menu_button);
+            vh.layout = v.findViewById(R.id.album_background);
             vh.icon = v.findViewById(R.id.icon);
             vh.icon.setBackgroundDrawable(mDefaultAlbumIcon);
-            vh.icon.setPadding(0, 0, 1, 0);
+            vh.icon.setPadding(0, 0, 0, 0);
             v.setTag(vh);
             return v;
         }
@@ -633,8 +641,7 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
         @Override
         public void bindView(View view, Context context, final Cursor cursor) {
             final ViewHolder vh = (ViewHolder) view.getTag();
-            vh.albumID = cursor.getString(cursor
-                    .getColumnIndexOrThrow(MediaStore.Audio.Albums._ID));
+            vh.albumID = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums._ID));
             String name = cursor.getString(mAlbumIdx);
             String displayname = name;
             vh.mCurrentAlbumName = displayname;
@@ -667,60 +674,90 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
                 iv.setTag(null);
             } else {
                 if (albumArt == null || albumArt[0] == null) {
-                    iv.setTag(art);
-                    new BitmapDownload(iv, art, name).execute();
+                    Glide
+                            .with(iv.getContext())
+                            .asBitmap()
+                            .load(art)
+                            .apply(new RequestOptions()
+                                    .centerCrop()
+                                    .placeholder(R.color.colorTransparent)
+                                    .diskCacheStrategy(DiskCacheStrategy.ALL))
+                            .transition(new BitmapTransitionOptions().crossFade())
+                            .listener(new RequestListener<Bitmap>() {
+                                @Override
+                                public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Bitmap> target, boolean isFirstResource) {
+                                    return false;
+                                }
+
+                                @Override
+                                public boolean onResourceReady(Bitmap resource, Object model, Target<Bitmap> target, DataSource dataSource, boolean isFirstResource) {
+                                    getPalette(resource, vh);
+                                    return false;
+                                }
+                            })
+                            .into(iv);
                 } else {
                     iv.setImageBitmap(albumArt[0]);
                 }
             }
 
-            view.setOnClickListener(new OnClickListener() {
-                @Override
-                public void onClick(View arg0) {
-                    mFragment.enterAlbum(Long.valueOf(vh.albumID));
+            view.setOnClickListener(v -> mFragment.enterAlbum(Long.valueOf(vh.albumID)));
+
+            vh.popup_menu_button.setOnClickListener(v -> {
+                if (mFragment.mPopupMenu != null) {
+                    mFragment.mPopupMenu.dismiss();
                 }
-            });
+                mFragment.mCurrentAlbumName = vh.mCurrentAlbumName;
+                PopupMenu popup = new PopupMenu(mFragment
+                        .getParentActivity(), vh.popup_menu_button);
+                popup.getMenu().add(0, PLAY_SELECTION, 0,
+                        R.string.play_selection);
+                mSub = popup.getMenu().addSubMenu(0,
+                        ADD_TO_PLAYLIST, 0, R.string.add_to_playlist);
+                MusicUtils.makePlaylistMenu(mFragment.getParentActivity(),
+                        mSub);
+                popup.getMenu()
+                        .add(0, DELETE_ITEM, 0, R.string.delete_item);
+                popup.show();
+                popup.setOnMenuItemClickListener(new OnMenuItemClickListener() {
 
-            vh.popup_menu_button.setOnClickListener(new OnClickListener() {
-
-                @Override
-                public void onClick(View v) {
-                    if (mFragment.mPopupMenu != null) {
-                        mFragment.mPopupMenu.dismiss();
+                    @Override
+                    public boolean onMenuItemClick(MenuItem item) {
+                        // TODO Auto-generated method stub
+                        mFragment.onContextItemSelected(item);
+                        return true;
                     }
-                    mFragment.mCurrentAlbumName = vh.mCurrentAlbumName;
-                    PopupMenu popup = new PopupMenu(mFragment
-                            .getParentActivity(), vh.popup_menu_button);
-                    popup.getMenu().add(0, PLAY_SELECTION, 0,
-                            R.string.play_selection);
-                    mSub = popup.getMenu().addSubMenu(0,
-                            ADD_TO_PLAYLIST, 0, R.string.add_to_playlist);
-                    MusicUtils.makePlaylistMenu(mFragment.getParentActivity(),
-                            mSub);
-                    popup.getMenu()
-                            .add(0, DELETE_ITEM, 0, R.string.delete_item);
-                    popup.show();
-                    popup.setOnMenuItemClickListener(new OnMenuItemClickListener() {
-
-                        @Override
-                        public boolean onMenuItemClick(MenuItem item) {
-                            // TODO Auto-generated method stub
-                            mFragment.onContextItemSelected(item);
-                            return true;
-                        }
-                    });
-                    mFragment.mPopupMenu = popup;
-                    mFragment.mCurrentAlbumId = vh.albumID;
-                    mFragment.mCurrentAlbumName = vh.albumName;
-                    mFragment.mCurrentArtistNameForAlbum = vh.artistNameForAlbum;
-                    mFragment.mIsUnknownArtist = mFragment.mCurrentArtistNameForAlbum == null
-                            || mFragment.mCurrentArtistNameForAlbum
-                            .equals(MediaStore.UNKNOWN_STRING);
-                    mFragment.mIsUnknownAlbum = mFragment.mCurrentAlbumName == null
-                            || mFragment.mCurrentAlbumName
-                            .equals(MediaStore.UNKNOWN_STRING);
-                }
+                });
+                mFragment.mPopupMenu = popup;
+                mFragment.mCurrentAlbumId = vh.albumID;
+                mFragment.mCurrentAlbumName = vh.albumName;
+                mFragment.mCurrentArtistNameForAlbum = vh.artistNameForAlbum;
+                mFragment.mIsUnknownArtist = mFragment.mCurrentArtistNameForAlbum == null
+                        || mFragment.mCurrentArtistNameForAlbum
+                        .equals(MediaStore.UNKNOWN_STRING);
+                mFragment.mIsUnknownAlbum = mFragment.mCurrentAlbumName == null
+                        || mFragment.mCurrentAlbumName
+                        .equals(MediaStore.UNKNOWN_STRING);
             });
+        }
+
+        private void getPalette(Bitmap bitmap, ViewHolder vh) {
+            Palette.from(bitmap).generate(palette -> {
+                if (palette != null)
+                    paintEmAll(palette, vh);
+            });
+        }
+
+        private void paintEmAll(Palette palette, ViewHolder vh) {
+            PaletteParser mParser = new PaletteParser(palette);
+            @ColorInt int colorPrimary = mParser.getColorPrimary();
+            @ColorInt int colorTextPrimary = mParser.getColorTextPrimary();
+            @ColorInt int colorTextSecondary = mParser.getColorTextSecondary();
+            @ColorInt int colorControlActivated = mParser.getColorControlActivated();
+            vh.layout.setBackgroundColor(colorPrimary);
+            vh.line1.setTextColor(colorTextPrimary);
+            vh.line2.setTextColor(colorTextSecondary);
+            vh.popup_menu_button.setColorFilter(colorControlActivated);
         }
 
         @Override
@@ -773,6 +810,7 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
             TextView line2;
             ImageView popup_menu_button;
             ImageView icon;
+            RelativeLayout layout;
             String albumID;
             String albumName;
             String artistNameForAlbum, mCurrentAlbumName;
@@ -787,34 +825,6 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
             protected void onQueryComplete(int token, Object cookie,
                                            Cursor cursor) {
                 mFragment.init(cursor);
-            }
-        }
-
-        class BitmapDownload extends AsyncTask {
-            ImageView img = null;
-            String art = null;
-            String name = null;
-
-            public BitmapDownload(ImageView img, String art, String name) {
-                this.img = img;
-                this.art = art;
-                this.name = name;
-            }
-
-            @Override
-            protected Object doInBackground(Object... params) {
-                Bitmap[] albumArt = new Bitmap[1];
-                albumArt[0] = BitmapFactory.decodeFile(art);
-                MusicUtils.mAlbumArtCache.put(art, albumArt);
-                return albumArt[0];
-            }
-
-            @Override
-            protected void onPostExecute(Object result) {
-                super.onPostExecute(result);
-                if (img != null && art.equals(img.getTag())) {
-                    img.setImageBitmap((Bitmap) result);
-                }
             }
         }
     }

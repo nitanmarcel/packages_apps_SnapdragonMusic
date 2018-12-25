@@ -17,7 +17,6 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#fafafa"
     android:gravity="center_vertical"
     android:orientation="vertical">
 
@@ -35,6 +34,6 @@
         android:horizontalSpacing="@dimen/album_list_space_horizontal"
         android:numColumns="2"
         android:paddingTop="@dimen/album_top_margin"
-        android:verticalSpacing="@dimen/album_list_space"></GridView>
+        android:verticalSpacing="@dimen/album_list_space" />
 
 </LinearLayout>

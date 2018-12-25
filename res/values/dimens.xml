@@ -34,9 +34,9 @@
     <dimen name="artist_text_size">16sp</dimen>
     <dimen name="album_text_size">14sp</dimen>
     <dimen name="album_list_space">8dp</dimen>
-    <dimen name="album_list_space_horizontal">4dp</dimen>
-    <dimen name="album_name">12sp</dimen>
-    <dimen name="album_artist_name">9sp</dimen>
+    <dimen name="album_list_space_horizontal">8dp</dimen>
+    <dimen name="album_name">14sp</dimen>
+    <dimen name="album_artist_name">12sp</dimen>
     <dimen name="album_top_margin">12dp</dimen>
     <dimen name="album_left_margin">6dp</dimen>
     <dimen name="album_right_margin">6dp</dimen>
