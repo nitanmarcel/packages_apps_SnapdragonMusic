@@ -199,6 +199,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
     private LinearLayout mLandControlPanel;
     private LinearLayout mAudioPlayerBody;
     private RelativeLayout mControlLayout;
+    private ImageView mDrawerHeader;
     private LyricView mLyricView;
     Runnable mUpdateResults = new Runnable() {
         public void run() {
@@ -655,6 +656,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
     }
 
     private void getPalette(Bitmap bitmap) {
+        mDrawerHeader.setImageBitmap(bitmap);
         Palette.from(bitmap).generate(palette -> {
             if (palette != null)
                 paintEmAll(palette);
@@ -675,7 +677,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         AnimatorSet headerSet = createPlainAnimatorSet(headerLayout, colorPrimaryOld, colorPrimary);
         headerSet.start();
 
-        mQueueLayout.setBackgroundColor(colorBackground);
+        //mQueueLayout.setBackgroundColor(colorBackground);
         mTotalTime.setTextColor(mParser.getColorTextPrimary());
         mCurrentTime.setTextColor(mParser.getColorTextPrimary());
         mPrevButton.setColorFilter(colorControlActivated);
@@ -701,6 +703,8 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         else
             ViewUtil.clearStatusBarMods(getWindow());
         colorPrimaryOld = colorPrimary;
+        TrackBrowserFragment.WaveView.mWaveColor = colorPrimary;
+        TrackBrowserFragment.WaveView.mWaveColorInactive = colorPrimaryDark;
     }
 
     private AnimatorSet createCircularAnimatorSet(View view, @ColorInt int colorNew) {
@@ -776,6 +780,7 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         mLyricAdapter = new LyricAdapter(this);
         mAudioPlayerBody = findViewById(R.id.audio_player_body);
         mControlLayout = findViewById(R.id.control_layout);
+        mDrawerHeader = findViewById(R.id.header_art);
         initAudioPlayerBodyView();
     }
 

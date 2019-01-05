@@ -25,7 +25,7 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="24dp"
         android:layout_marginTop="24dp"
-        android:text="@string/create_playlist_create_text_prompt"></TextView>
+        android:text="@string/create_playlist_create_text_prompt" />
 
     <EditText
         android:id="@+id/playlist"

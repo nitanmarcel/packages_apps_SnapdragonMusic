@@ -200,6 +200,7 @@ public class MusicBrowserActivity extends MediaPlaybackActivity implements
                 @Override
                 public void onDrawerClosed(@NonNull View drawerView) {
                     showScreen(toShowPosition);
+
                 }
 
                 @Override

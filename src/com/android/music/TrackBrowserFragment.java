@@ -35,11 +35,11 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.res.Configuration;
-import android.content.res.Resources;
 import android.database.AbstractCursor;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.media.AudioManager;
 import android.net.Uri;
@@ -60,8 +60,6 @@ import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
-import android.view.View.OnClickListener;
-import android.view.View.OnKeyListener;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.widget.AbsListView;
@@ -354,8 +352,7 @@ public class TrackBrowserFragment extends Fragment implements
                              Bundle savedInstanceState) {
         View rootView = inflater.inflate(R.layout.media_picker_fragment,
                 container, false);
-        mShuffleLayout = rootView
-                .findViewById(R.id.shuffleLayout);
+        mShuffleLayout = rootView.findViewById(R.id.shuffleLayout);
         mSdErrorMessageView = rootView.findViewById(R.id.sd_message);
         mSdErrorMessageIcon = rootView.findViewById(R.id.sd_icon);
         mTrackList = rootView.findViewById(R.id.list);
@@ -383,58 +380,43 @@ public class TrackBrowserFragment extends Fragment implements
         mToken = MusicUtils.bindToService(mParentActivity, this);
 
         // don't set the album art until after the view has been layed out
-        mTrackList.post(new Runnable() {
-
-            public void run() {
-                setAlbumArtBackground();
-            }
-        });
+        mTrackList.post(() -> setAlbumArtBackground());
         mTrackList.setOnItemClickListener(this);
         mTrackList.setOnScrollListener(this);
-        ImageButton shuffleAll = rootView
-                .findViewById(R.id.shuffleAll);
-        shuffleAll.setOnClickListener(new OnClickListener() {
-
-            @Override
-            public void onClick(View v) {
-                // TODO Auto-generated method stub
-                Cursor cursor = MusicUtils.query(mParentActivity,
-                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                        new String[]{MediaStore.Audio.Media._ID},
-                        MediaStore.Audio.Media.IS_MUSIC + "=1", null,
-                        MediaStore.Audio.Media.DEFAULT_SORT_ORDER);
-                if (cursor != null) {
-                    MusicUtils.shuffleAll(mParentActivity, cursor);
-                    cursor.close();
-                }
+        ImageButton shuffleAll = rootView.findViewById(R.id.shuffleAll);
+        shuffleAll.setOnClickListener(v -> {
+            Cursor cursor = MusicUtils.query(mParentActivity,
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    new String[]{MediaStore.Audio.Media._ID},
+                    MediaStore.Audio.Media.IS_MUSIC + "=1", null,
+                    MediaStore.Audio.Media.DEFAULT_SORT_ORDER);
+            if (cursor != null) {
+                MusicUtils.shuffleAll(mParentActivity, cursor);
+                cursor.close();
             }
         });
-
-        rootView.setOnKeyListener(new OnKeyListener() {
-            @Override
-            public boolean onKey(View v, int keyCode, KeyEvent event) {
-                int curpos = mTrackList.getSelectedItemPosition();
-                if (mPlaylist != null && !mPlaylist.equals("recentlyadded")
-                        && curpos >= 0 && event.getMetaState() != 0
-                        && event.getAction() == KeyEvent.ACTION_DOWN) {
-                    switch (event.getKeyCode()) {
-                        case KeyEvent.KEYCODE_DPAD_UP:
-                            moveItem(true);
-                            return true;
-                        case KeyEvent.KEYCODE_DPAD_DOWN:
-                            moveItem(false);
-                            return true;
-                        case KeyEvent.KEYCODE_DEL:
-                            removeItem();
-                            return true;
-                    }
-                } else if (event.getAction() == KeyEvent.ACTION_UP
-                        && event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
-                    mParentActivity.finish();
-                    return true;
+        rootView.setOnKeyListener((v, keyCode, event) -> {
+            int curpos = mTrackList.getSelectedItemPosition();
+            if (mPlaylist != null && !mPlaylist.equals("recentlyadded")
+                    && curpos >= 0 && event.getMetaState() != 0
+                    && event.getAction() == KeyEvent.ACTION_DOWN) {
+                switch (event.getKeyCode()) {
+                    case KeyEvent.KEYCODE_DPAD_UP:
+                        moveItem(true);
+                        return true;
+                    case KeyEvent.KEYCODE_DPAD_DOWN:
+                        moveItem(false);
+                        return true;
+                    case KeyEvent.KEYCODE_DEL:
+                        removeItem();
+                        return true;
                 }
-                return false;
+            } else if (event.getAction() == KeyEvent.ACTION_UP
+                    && event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
+                mParentActivity.finish();
+                return true;
             }
+            return false;
         });
         return rootView;
     }
@@ -1540,24 +1522,17 @@ public class TrackBrowserFragment extends Fragment implements
         private static final float STOP = 11f / 12;
         private static final int FRAME_DELAY = 10;
 
+        public static int mWaveColor = Color.DKGRAY;
+        public static int mWaveColorInactive = Color.LTGRAY;
+
         private float[] mBars = new float[4];
         private float[] mBarsNext = new float[4];
-
         private boolean mAnimate;
         private int mFrame;
-
-        private int mWaveColor;
-        private int mWaveColorInactive;
-
         private Paint mPaint;
 
         public WaveView(Context context, AttributeSet attrs) {
             super(context, attrs);
-
-            Resources res = getResources();
-            mWaveColor = res.getColor(R.color.wave_color);
-            mWaveColorInactive = res.getColor(R.color.wave_color_inactive);
-
             mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         }
 

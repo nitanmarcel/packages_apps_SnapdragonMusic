@@ -35,7 +35,6 @@
             android:fontFamily="sans-serif"
             android:paddingStart="18dip"
             android:text="@string/shuffle_all"
-            android:textColor="@color/colorAccent"
             android:textSize="16sp" />
 
         <ImageButton

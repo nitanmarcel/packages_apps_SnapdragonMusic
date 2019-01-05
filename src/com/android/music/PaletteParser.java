@@ -64,7 +64,7 @@ public class PaletteParser {
         colorBackground = ColorUtil.manipulateColor(colorPrimary, 0.35f);
         colorBackgroundDark = ColorUtil.manipulateColor(colorBackground, 0.70f);
 
-        colorAccent = palette.getLightVibrantColor(Color.LTGRAY);
+        colorAccent = palette.getVibrantColor(Color.LTGRAY);
     }
 
     public int getColorPrimary() {

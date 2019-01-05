@@ -46,10 +46,9 @@
 
             <ImageView
                 android:id="@+id/album_icon_view"
-                android:layout_width="320dp"
-                android:layout_height="320dp"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
                 android:layout_gravity="center"
-                android:layout_marginTop="-32dp"
                 android:scaleType="centerCrop"
                 android:src="@drawable/album_cover_background" />
 
@@ -91,7 +90,7 @@
     <RelativeLayout
         android:id="@+id/control_layout"
         android:layout_width="match_parent"
-        android:layout_height="192dp"
+        android:layout_height="225dp"
         android:layout_alignParentBottom="true"
         android:orientation="horizontal">
 
@@ -151,7 +150,8 @@
             android:layout_height="wrap_content"
             android:layout_centerVertical="true"
             android:layout_toStartOf="@id/randomicon"
-            android:layout_toEndOf="@id/loop_view">
+            android:layout_toEndOf="@id/loop_view"
+            android:padding="8dp">
 
             <com.android.music.RepeatingImageButton
                 android:id="@+id/previcon"

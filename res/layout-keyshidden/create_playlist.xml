@@ -37,7 +37,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dip"
-            android:text="@string/create_playlist_create_text_prompt"></TextView>
+            android:text="@string/create_playlist_create_text_prompt" />
     </LinearLayout>
 
     <EditText

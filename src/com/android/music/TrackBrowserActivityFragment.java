@@ -31,6 +31,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.database.AbstractCursor;
@@ -50,6 +51,8 @@ import android.os.RemoteException;
 import android.provider.MediaStore;
 import android.provider.MediaStore.Audio.Playlists;
 import android.provider.MediaStore.Video.VideoColumns;
+import android.support.annotation.Nullable;
+import android.support.v7.graphics.Palette;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -64,6 +67,7 @@ import android.widget.AdapterView.OnItemClickListener;
 import android.widget.AlphabetIndexer;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.PopupMenu;
 import android.widget.TextView;
@@ -71,6 +75,12 @@ import android.widget.TextView;
 import com.android.music.MusicUtils.ServiceToken;
 import com.android.music.TrackBrowserActivityFragment.TrackListAdapter.ViewHolder;
 import com.android.music.TrackBrowserFragment.WaveView;
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.GlideException;
+import com.bumptech.glide.request.RequestListener;
+import com.bumptech.glide.request.RequestOptions;
+import com.bumptech.glide.request.target.Target;
 
 import java.util.Arrays;
 
@@ -131,6 +141,9 @@ public class TrackBrowserActivityFragment extends Fragment
     private ListView mListView;
     private TextView mTextView1;
     private TextView mTextView2;
+    private ImageView menuOverflow;
+    private ImageView floatingPlay;
+    private LinearLayout mLayout;
     private MediaPlaybackActivity mParentActivity;
     private ImageView mImageView;
     private boolean mIsparentActivityFInishing;
@@ -372,6 +385,7 @@ public class TrackBrowserActivityFragment extends Fragment
         mListView = rootView.findViewById(R.id.media_list);
         mTextView1 = rootView.findViewById(R.id.textView1);
         mTextView2 = rootView.findViewById(R.id.textView2);
+        mLayout = rootView.findViewById(R.id.bottom_layout);
         mImageView = rootView.findViewById(R.id.imageView1);
         Resources r = getResources();
         mDefaultAlbumIcon = (BitmapDrawable) r.getDrawable(R.drawable.unknown_albums);
@@ -398,8 +412,8 @@ public class TrackBrowserActivityFragment extends Fragment
                 mParentActivity.loadPreviousFragment();
             }
         });
-        ImageView floatingpaly = rootView.findViewById(R.id.imageView4);
-        floatingpaly.setOnClickListener(new OnClickListener() {
+        floatingPlay = rootView.findViewById(R.id.imageView4);
+        floatingPlay.setOnClickListener(new OnClickListener() {
 
             @Override
             public void onClick(View v) {
@@ -407,7 +421,7 @@ public class TrackBrowserActivityFragment extends Fragment
                 repeatPlay();
             }
         });
-        ImageView menuOverflow = rootView.findViewById(R.id.menu_overflow);
+        menuOverflow = rootView.findViewById(R.id.menu_overflow);
         mParentActivity.setTouchDelegate(menuOverflow);
         menuOverflow.setOnClickListener(new OnClickListener() {
 
@@ -462,13 +476,7 @@ public class TrackBrowserActivityFragment extends Fragment
         }
         //attaching listview listener
         mTrackList.setOnItemClickListener(this);
-        // don't set the album art until after the view has been layed out
-        if (mGetArtworkAsyncTask != null
-                && mGetArtworkAsyncTask.getStatus() != AsyncTask.Status.FINISHED) {
-            mGetArtworkAsyncTask.cancel(true);
-        }
-        mGetArtworkAsyncTask = new GetArtworkAsyncTask();
-        mGetArtworkAsyncTask.execute();
+        setImageSrc(mImageView, getArtwork());
         container.removeAllViews();
         container.addView(rootView);
     }
@@ -487,7 +495,7 @@ public class TrackBrowserActivityFragment extends Fragment
         if (!mEditMode) {
             try {
                 if (bm != null) {
-                    mImageView.setImageBitmap(bm);
+                    //setImageSrc(mImageView, bm);
                     MusicUtils.setBackground(mImageView, bm);
                     mTrackList.setCacheColorHint(0);
                     return;
@@ -501,6 +509,47 @@ public class TrackBrowserActivityFragment extends Fragment
         if (mTrackList != null) {
             mTrackList.setCacheColorHint(0);
         }
+    }
+
+    private void setImageSrc(ImageView imageView, Bitmap bitmap) {
+        RequestOptions mRequestOptions = new RequestOptions();
+        mRequestOptions.placeholder(R.drawable.album_cover_background);
+        mRequestOptions.centerCrop();
+        Glide
+                .with(imageView.getContext())
+                .asBitmap()
+                .load(bitmap)
+                .apply(mRequestOptions)
+                .listener(new RequestListener<Bitmap>() {
+                    @Override
+                    public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Bitmap> target, boolean isFirstResource) {
+                        return false;
+                    }
+
+                    @Override
+                    public boolean onResourceReady(Bitmap resource, Object model, Target<Bitmap> target, DataSource dataSource, boolean isFirstResource) {
+                        getPalette(resource);
+                        return false;
+                    }
+                })
+                .into(imageView);
+    }
+
+    private void getPalette(Bitmap bitmap) {
+        Palette.from(bitmap).generate(palette -> {
+            if (palette != null)
+                paintEmAll(palette);
+        });
+    }
+
+    private void paintEmAll(Palette palette) {
+        PaletteParser mParser = new PaletteParser(palette);
+        mLayout.setBackgroundColor(mParser.getColorPrimary());
+        mTextView1.setTextColor(mParser.getColorTextPrimary());
+        mTextView2.setTextColor(mParser.getColorTextSecondary());
+        //floatingPlay.setBackgroundTintList(ColorStateList.valueOf(mParser.getColorAccent()));
+        floatingPlay.setImageTintList(ColorStateList.valueOf(mParser.getColorPrimary()));
+        menuOverflow.setColorFilter(mParser.getColorControlActivated());
     }
 
     public void onServiceConnected(ComponentName name, IBinder service) {
@@ -546,8 +595,6 @@ public class TrackBrowserActivityFragment extends Fragment
 
     public void onServiceDisconnected(ComponentName name) {
         // we can't really function without the service, so don't
-
-
         mParentActivity.finish();
     }
 
@@ -1917,21 +1964,6 @@ public class TrackBrowserActivityFragment extends Fragment
                 public String selection;
                 public String[] selectionArgs;
                 public String orderBy;
-            }
-        }
-    }
-
-    private class GetArtworkAsyncTask extends AsyncTask<Void, Void, Bitmap> {
-
-        @Override
-        protected Bitmap doInBackground(Void... params) {
-            return getArtwork();
-        }
-
-        @Override
-        protected void onPostExecute(Bitmap bitmap) {
-            if (!isCancelled()) {
-                setAlbumArtBackground(bitmap);
             }
         }
     }

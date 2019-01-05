@@ -45,7 +45,6 @@ import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.GridView;
@@ -153,7 +152,7 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
                 R.layout.track_list_item_album, mAlbumCursor, new String[]{},
                 new int[]{});
         mAlbumList.setAdapter(mAdapter);
-        mAlbumList.setOnScrollListener(new AbsListView.OnScrollListener() {
+        /*AlbumList.setOnScrollListener(new AbsListView.OnScrollListener() {
             @Override
             public void onScrollStateChanged(AbsListView view, int scrollState) {
                 if (scrollState == SCROLL_STATE_FLING) {
@@ -168,7 +167,7 @@ public class AlbumBrowserFragment extends Fragment implements MusicUtils.Defs,
             public void onScroll(AbsListView view, int firstVisibleItem,
                                  int visibleItemCount, int totalItemCount) {
             }
-        });
+        });*/
         getAlbumCursor(mAdapter.getQueryHandler(), null);
         return rootView;
     }

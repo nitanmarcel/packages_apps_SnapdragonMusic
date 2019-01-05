@@ -48,7 +48,7 @@
     <dimen name="album_art_dimen">43dp</dimen>
     <dimen name="statusbar_top">3dp</dimen>
     <dimen name="imagesize">320dp</dimen>
-    <dimen name="layoutsize">370dp</dimen>
+    <dimen name="layoutsize">420dp</dimen>
     <dimen name="list_item_size">65dp</dimen>
     <dimen name="lyric_line_height">30dp</dimen>
     <dimen name="elevation_artist">2dp</dimen>

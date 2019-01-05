@@ -8,6 +8,7 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.support.annotation.ColorInt;
 import android.support.annotation.NonNull;
+import android.support.v4.graphics.drawable.DrawableCompat;
 import android.view.View;
 import android.view.Window;
 import android.view.animation.PathInterpolator;
@@ -53,6 +54,12 @@ public class ViewUtil {
         drawable.draw(canvas);
 
         return bitmap;
+    }
+
+    public static Drawable setTint(Drawable d, int color) {
+        Drawable wrappedDrawable = DrawableCompat.wrap(d);
+        DrawableCompat.setTint(wrappedDrawable, color);
+        return wrappedDrawable;
     }
 
     public static void clearStatusBarMods(@NonNull Window window) {

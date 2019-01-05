@@ -1,6 +1,7 @@
 package com.android.music.adapters;
 
 import android.annotation.ColorInt;
+import android.annotation.SuppressLint;
 import android.content.AsyncQueryHandler;
 import android.content.ContentResolver;
 import android.content.Context;
@@ -9,6 +10,7 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.provider.MediaStore;
 import android.support.annotation.Nullable;
@@ -160,42 +162,33 @@ public class AlbumListAdapter extends SimpleCursorAdapter implements
         // We don't actually need the path to the thumbnail file,
         // we just use it to see if there is album art or not
         String art = cursor.getString(mAlbumArtIndex);
-        Bitmap[] albumArt;
-        if (art != null) {
-            albumArt = MusicUtils.mAlbumArtCache.get(art);
-        } else {
-            albumArt = null;
-        }
+
         if (mFastscroll || unknown || art == null || art.length() == 0) {
-            iv.setImageDrawable(null);
+            iv.setBackgroundColor(R.color.colorTransparent);
             iv.setTag(null);
         } else {
-            if (albumArt == null || albumArt[0] == null) {
-                Glide
-                        .with(iv.getContext())
-                        .asBitmap()
-                        .load(art)
-                        .apply(new RequestOptions()
-                                .centerCrop()
-                                .placeholder(R.color.colorTransparent)
-                                .diskCacheStrategy(DiskCacheStrategy.ALL))
-                        .transition(new BitmapTransitionOptions().crossFade())
-                        .listener(new RequestListener<Bitmap>() {
-                            @Override
-                            public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Bitmap> target, boolean isFirstResource) {
-                                return false;
-                            }
+            Glide
+                    .with(iv.getContext())
+                    .asBitmap()
+                    .load(art)
+                    .apply(new RequestOptions()
+                            .centerCrop()
+                            .placeholder(R.color.colorTransparent)
+                            .diskCacheStrategy(DiskCacheStrategy.ALL))
+                    .transition(new BitmapTransitionOptions().crossFade())
+                    .listener(new RequestListener<Bitmap>() {
+                        @Override
+                        public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Bitmap> target, boolean isFirstResource) {
+                            return false;
+                        }
 
-                            @Override
-                            public boolean onResourceReady(Bitmap resource, Object model, Target<Bitmap> target, DataSource dataSource, boolean isFirstResource) {
-                                getPalette(resource, vh);
-                                return false;
-                            }
-                        })
-                        .into(iv);
-            } else {
-                iv.setImageBitmap(albumArt[0]);
-            }
+                        @Override
+                        public boolean onResourceReady(Bitmap resource, Object model, Target<Bitmap> target, DataSource dataSource, boolean isFirstResource) {
+                            getPalette(resource, vh);
+                            return false;
+                        }
+                    })
+                    .into(iv);
         }
 
         view.setOnClickListener(v -> mFragment.enterAlbum(Long.valueOf(vh.albumID)));
@@ -313,6 +306,7 @@ public class AlbumListAdapter extends SimpleCursorAdapter implements
         String artistNameForAlbum, mCurrentAlbumName;
     }
 
+    @SuppressLint("HandlerLeak")
     class QueryHandler extends AsyncQueryHandler {
         QueryHandler(ContentResolver res) {
             super(res);

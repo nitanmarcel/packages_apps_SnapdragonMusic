@@ -33,77 +33,103 @@
     android:orientation="vertical"
     android:padding="20dp">
 
-    <LinearLayout
-        android:layout_width="fill_parent"
+    <TableLayout
+        android:id="@+id/app_info"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:gravity="center"
+        android:stretchColumns="*">
 
-        <TextView
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/song_title" />
+        <TableRow android:layout_marginBottom="5dp">
 
-        <TextView
-            android:id="@+id/song_name"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:padding="10dp" />
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/song_title"
+                android:textAppearance="?android:textAppearanceListItem" />
 
-        <TextView
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/album_title" />
+            <TextView
+                android:id="@+id/song_name"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:padding="10dp" />
+        </TableRow>
 
-        <TextView
-            android:id="@+id/album_name"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:padding="10dp" />
+        <TableRow android:layout_marginBottom="5dp">
 
-        <TextView
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/artist_title" />
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/album_title"
+                android:textAppearance="?android:textAppearanceListItem" />
 
-        <TextView
-            android:id="@+id/artist_name"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:padding="10dp" />
+            <TextView
+                android:id="@+id/album_name"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:padding="10dp" />
+        </TableRow>
 
-        <TextView
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/duration_title" />
+        <TableRow android:layout_marginBottom="5dp">
 
-        <TextView
-            android:id="@+id/duration_name"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:padding="10dp" />
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/artist_title"
+                android:textAppearance="?android:textAppearanceListItem" />
 
-        <TextView
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/size_title" />
+            <TextView
+                android:id="@+id/artist_name"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:padding="10dp" />
+        </TableRow>
 
-        <TextView
-            android:id="@+id/size_name"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:padding="10dp" />
+        <TableRow android:layout_marginBottom="5dp">
 
-        <TextView
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/path_title" />
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/duration_title"
+                android:textAppearance="?android:textAppearanceListItem" />
 
-        <TextView
-            android:id="@+id/path_name"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:padding="10dp" />
+            <TextView
+                android:id="@+id/duration_name"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:padding="10dp" />
+        </TableRow>
 
-    </LinearLayout>
+        <TableRow android:layout_marginBottom="5dp">
+
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/size_title"
+                android:textAppearance="?android:textAppearanceListItem" />
+
+            <TextView
+                android:id="@+id/size_name"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:padding="10dp" />
+        </TableRow>
+
+        <TableRow android:layout_marginBottom="5dp">
+
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/path_title"
+                android:textAppearance="?android:textAppearanceListItem" />
+
+            <TextView
+                android:id="@+id/path_name"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:padding="10dp" />
+        </TableRow>
+
+    </TableLayout>
 
 </ScrollView>
