@@ -37,7 +37,7 @@ public class PaletteParser {
     }
 
     private void extractColors() {
-        Palette.Swatch swatch = palette.getVibrantSwatch();
+        Palette.Swatch swatch = palette.getDominantSwatch();
 
         //Make sure we get a fallback swatch if LightVibrantSwatch is not available
         if (swatch == null)
@@ -45,7 +45,7 @@ public class PaletteParser {
 
         //Make sure we get another fallback swatch if DarkVibrantSwatch is not available
         if (swatch == null)
-            swatch = palette.getDominantSwatch();
+            swatch = palette.getVibrantSwatch();
 
         colorTextPrimary = swatch.getBodyTextColor();
         colorTextSecondary = swatch.getTitleTextColor();
