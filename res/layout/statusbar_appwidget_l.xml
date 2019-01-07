@@ -37,14 +37,15 @@
         android:layout_height="116dp"
         android:layout_gravity="center_vertical"
         android:layout_margin="6dp"
-        android:scaleType="fitXY"
-        android:src="@drawable/album_cover_background"></ImageView>
+        android:scaleType="centerCrop"
+        android:src="@drawable/album_cover_background" />
 
     <ImageButton
         android:id="@+id/exit"
         android:layout_width="24dp"
         android:layout_height="24dp"
         android:layout_alignParentEnd="true"
+        android:layout_margin="8dp"
         android:background="@color/colorTransparent"
         android:src="@drawable/close"
         android:visibility="gone" />
@@ -55,7 +56,7 @@
         android:layout_height="75dp"
         android:layout_above="@+id/split"
         android:layout_marginEnd="44dp"
-        android:layout_toRightOf="@id/icon"
+        android:layout_toEndOf="@id/icon"
         android:gravity="center_vertical"
         android:orientation="vertical"
         android:paddingTop="7dp"
@@ -71,8 +72,8 @@
             android:ellipsize="marquee"
             android:focusable="true"
             android:singleLine="true"
-            android:textColor="#000000"
-            android:textSize="16dp" />
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="16sp" />
 
         <TextView
             android:id="@+id/artist"
@@ -86,8 +87,8 @@
             android:scrollHorizontally="true"
             android:singleLine="true"
             android:text="@string/widget_initial_text"
-            android:textColor="#000000"
-            android:textSize="14dp" />
+            android:textColor="?android:attr/textColorSecondary"
+            android:textSize="14sp" />
 
         <TextView
             android:id="@+id/album"
@@ -100,8 +101,8 @@
             android:maxLines="2"
             android:scrollHorizontally="true"
             android:singleLine="true"
-            android:textColor="#000000"
-            android:textSize="14dp" />
+            android:textColor="?android:attr/textColorSecondary"
+            android:textSize="14sp" />
     </LinearLayout>
 
     <TextView
@@ -112,14 +113,14 @@
         android:layout_alignStart="@+id/music_info"
         android:layout_marginEnd="6dp"
         android:alpha="0.1"
-        android:background="#000000" />
+        android:background="@color/colorGrey" />
 
     <RelativeLayout
         android:id="@+id/control"
         android:layout_width="match_parent"
         android:layout_height="52dp"
         android:layout_alignParentBottom="true"
-        android:layout_toRightOf="@id/icon"
+        android:layout_toEndOf="@id/icon"
         android:paddingTop="8dp"
         android:paddingBottom="8dp">
 
@@ -129,10 +130,9 @@
             android:layout_width="36dp"
             android:layout_height="36dp"
             android:layout_centerVertical="true"
-            android:layout_marginRight="28dp"
-            android:layout_toLeftOf="@+id/pause"
-            android:src="@drawable/notification_prev"
-            android:theme="@android:style/Theme.DeviceDefault.Light" />
+            android:layout_marginEnd="28dp"
+            android:layout_toStartOf="@+id/pause"
+            android:src="@drawable/pre" />
 
         <ImageButton
             android:id="@+id/pause"
@@ -141,7 +141,7 @@
             android:layout_centerInParent="true"
             android:background="@drawable/icon_play_pause_backgroud"
             android:scaleType="fitXY"
-            android:src="@drawable/notification_play" />
+            android:src="@drawable/play_arrow" />
 
         <ImageButton
             android:id="@+id/next"
@@ -151,8 +151,7 @@
             android:layout_centerVertical="true"
             android:layout_marginLeft="28dp"
             android:layout_toRightOf="@id/pause"
-            android:src="@drawable/notification_next"
-            android:theme="@android:style/Theme.DeviceDefault.Light" />
+            android:src="@drawable/nex" />
     </RelativeLayout>
 
 </RelativeLayout>

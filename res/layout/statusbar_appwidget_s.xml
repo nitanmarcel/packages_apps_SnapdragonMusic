@@ -37,14 +37,15 @@
         android:layout_height="60dp"
         android:layout_gravity="center_vertical"
         android:layout_margin="6dp"
-        android:scaleType="fitXY"
-        android:src="@drawable/album_cover_background"></ImageView>
+        android:scaleType="centerCrop"
+        android:src="@drawable/album_cover_background" />
 
     <ImageButton
         android:id="@+id/exit"
         android:layout_width="24dp"
         android:layout_height="24dp"
         android:layout_alignParentEnd="true"
+        android:layout_margin="8dp"
         android:background="@color/colorTransparent"
         android:src="@drawable/close"
         android:visibility="gone" />
@@ -55,8 +56,8 @@
         android:layout_height="wrap_content"
         android:layout_centerVertical="true"
         android:layout_marginEnd="6dp"
-        android:layout_toLeftOf="@+id/prev"
-        android:layout_toRightOf="@id/icon"
+        android:layout_toStartOf="@+id/prev"
+        android:layout_toEndOf="@id/icon"
         android:orientation="vertical">
 
         <TextView
@@ -69,8 +70,8 @@
             android:ellipsize="marquee"
             android:focusable="true"
             android:singleLine="true"
-            android:textColor="#000000"
-            android:textSize="16dp" />
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="16sp" />
 
         <TextView
             android:id="@+id/artist"
@@ -84,8 +85,8 @@
             android:scrollHorizontally="true"
             android:singleLine="true"
             android:text="@string/widget_initial_text"
-            android:textColor="#000000"
-            android:textSize="14dp" />
+            android:textColor="?android:attr/textColorSecondary"
+            android:textSize="14sp" />
 
         <TextView
             android:id="@+id/album"
@@ -98,8 +99,8 @@
             android:maxLines="2"
             android:scrollHorizontally="true"
             android:singleLine="true"
-            android:textColor="#000000"
-            android:textSize="14dp" />
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="14sp" />
     </LinearLayout>
 
     <ImageButton
@@ -108,21 +109,20 @@
         android:layout_width="36dp"
         android:layout_height="36dp"
         android:layout_centerVertical="true"
-        android:layout_marginRight="12dp"
-        android:layout_toLeftOf="@+id/pause"
-        android:src="@drawable/notification_prev"
-        android:theme="@android:style/Theme.DeviceDefault.Light" />
+        android:layout_marginEnd="12dp"
+        android:layout_toStartOf="@+id/pause"
+        android:src="@drawable/pre" />
 
     <ImageButton
         android:id="@+id/pause"
         android:layout_width="36dp"
         android:layout_height="36dp"
         android:layout_centerVertical="true"
-        android:layout_marginRight="12dp"
-        android:layout_toLeftOf="@+id/next"
+        android:layout_marginEnd="12dp"
+        android:layout_toStartOf="@+id/next"
         android:background="@drawable/icon_play_pause_backgroud"
         android:scaleType="fitXY"
-        android:src="@drawable/notification_play" />
+        android:src="@drawable/play_arrow" />
 
     <ImageButton
         android:id="@+id/next"
@@ -132,7 +132,6 @@
         android:layout_alignParentEnd="true"
         android:layout_centerVertical="true"
         android:layout_marginEnd="24dp"
-        android:src="@drawable/notification_next"
-        android:theme="@android:style/Theme.DeviceDefault.Light" />
+        android:src="@drawable/nex" />
 
 </RelativeLayout>
