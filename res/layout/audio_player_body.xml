@@ -151,7 +151,8 @@
             android:layout_centerVertical="true"
             android:layout_toStartOf="@id/randomicon"
             android:layout_toEndOf="@id/loop_view"
-            android:padding="8dp">
+            android:clipToPadding="false"
+            android:padding="5dp">
 
             <com.android.music.RepeatingImageButton
                 android:id="@+id/previcon"
@@ -165,11 +166,12 @@
 
             <ImageButton
                 android:id="@+id/play_pause"
-                android:layout_width="72dp"
-                android:layout_height="72dp"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
                 android:layout_centerInParent="true"
                 android:layout_centerVertical="true"
                 android:background="@drawable/icon_play_pause_backgroud"
+                android:elevation="2dp"
                 android:src="@drawable/play" />
 
             <com.android.music.RepeatingImageButton

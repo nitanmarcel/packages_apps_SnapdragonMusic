@@ -196,7 +196,6 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
     private boolean mCheckIfSeekRequired = false;
     private ImageView mFavoriteIcon;
     private ImageView mLyricIcon;
-    private LinearLayout mLandControlPanel;
     private LinearLayout mAudioPlayerBody;
     private RelativeLayout mControlLayout;
     private ImageView mDrawerHeader;
@@ -519,9 +518,6 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
                     queueNextRefreshForLyric(REFRESH_MILLIONS);
                     setLyricIconImage();
                 }
-                if (mLandControlPanel != null) {
-                    mLandControlPanel.setVisibility(View.VISIBLE);
-                }
             } else {
                 MusicUtils.isFragmentRemoved = false;
                 mSlidingPanelLayout.mIsQueueEnabled = true;
@@ -542,9 +538,6 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
                 if (mHasLrc) {
                     mLyricPanel.setVisibility(View.GONE);
                     stopQueueNextRefreshForLyric();
-                }
-                if (mLandControlPanel != null) {
-                    mLandControlPanel.setVisibility(View.GONE);
                 }
             }
         }
@@ -670,12 +663,10 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         @ColorInt int colorBackground = mParser.getColorBackground();
         @ColorInt int colorControlActivated = mParser.getColorControlActivated();
 
-        AnimatorSet controlButtonSet = createCircularAnimatorSet(mControlLayout, colorPrimary);
-        controlButtonSet.start();
-
+        mControlLayout = findViewById(R.id.control_layout);
         View headerLayout = mNowPlayingView.findViewById(R.id.header_layout);
-        AnimatorSet headerSet = createPlainAnimatorSet(headerLayout, colorPrimaryOld, colorPrimary);
-        headerSet.start();
+        createCircularAnimatorSet(mControlLayout, colorPrimary);
+        createPlainAnimatorSet(headerLayout, colorPrimaryOld, colorPrimary);
 
         //mQueueLayout.setBackgroundColor(colorBackground);
         mTotalTime.setTextColor(mParser.getColorTextPrimary());
@@ -707,24 +698,24 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         TrackBrowserFragment.WaveView.mWaveColorInactive = colorPrimaryDark;
     }
 
-    private AnimatorSet createCircularAnimatorSet(View view, @ColorInt int colorNew) {
-        int x = (int) (mControlLayout.getWidth() / 2);
-        int y = (int) (mControlLayout.getHeight() / 2);
+    private void createCircularAnimatorSet(View view, @ColorInt int colorNew) {
+        int x = mControlLayout.getWidth() / 2;
+        int y = mControlLayout.getHeight() / 2;
         float startRadius = mPauseButton.getWidth();
         float endRadius = mControlLayout.getHeight();
         view.setBackgroundColor(colorNew);
         Animator backgroundAnimator = ViewAnimationUtils.createCircularReveal(view, x, y, startRadius, endRadius);
         AnimatorSet animatorSet = new AnimatorSet();
         animatorSet.play(backgroundAnimator);
-        return animatorSet;
+        animatorSet.start();
     }
 
-    private AnimatorSet createPlainAnimatorSet(View v, @ColorInt int colorOld, @ColorInt int colorNew) {
+    private void createPlainAnimatorSet(View v, @ColorInt int colorOld, @ColorInt int colorNew) {
         v.setBackgroundColor(colorNew);
         Animator backgroundAnimator = ViewUtil.createBackgroundColorTransition(v, colorOld, colorNew);
         AnimatorSet animatorSet = new AnimatorSet();
         animatorSet.play(backgroundAnimator);
-        return animatorSet;
+        animatorSet.start();
     }
 
     public View getNowPlayingView() {
@@ -831,7 +822,6 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
                 showLyric();
             }
         });
-        mLandControlPanel = findViewById(R.id.land_control_panel);
         if (!MusicUtils.isFragmentRemoved) {
             handleDisplay();
             changeFragment();
@@ -848,9 +838,6 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         if (mHasLrc) {
             mLyricPanel.setVisibility(View.GONE);
             stopQueueNextRefreshForLyric();
-        }
-        if (mLandControlPanel != null) {
-            mLandControlPanel.setVisibility(View.GONE);
         }
     }
 
@@ -1059,9 +1046,6 @@ public class MediaPlaybackActivity extends Activity implements MusicUtils.Defs,
         mSlidingPanelLayout.mIsQueueEnabled = false;
         mAlbumIcon.setVisibility(View.VISIBLE);
         mLyricIcon.setVisibility(View.VISIBLE);
-        if (mLandControlPanel != null) {
-            mLandControlPanel.setVisibility(View.VISIBLE);
-        }
         if (mHasLrc && mIsLyricDisplay) {
             mLyricPanel.setVisibility(View.VISIBLE);
             queueNextRefreshForLyric(REFRESH_MILLIONS);
