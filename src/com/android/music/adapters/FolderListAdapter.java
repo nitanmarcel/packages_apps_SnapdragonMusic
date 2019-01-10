@@ -37,10 +37,10 @@ import static com.android.music.MusicUtils.Defs.PLAY_SELECTION;
 public class FolderListAdapter extends SimpleCursorAdapter implements SectionIndexer {
 
     private final BitmapDrawable mDefaultAlbumIcon;
-    private final Resources mResources;
     private final String mUnknownPath;
     private final String mUnknownCount;
     private final Object[] mFormatArgs = new Object[1];
+    private Resources mResources;
     private Drawable mNowPlaying;
     private int mDataIdx;
     private int mCountIdx;
@@ -75,6 +75,8 @@ public class FolderListAdapter extends SimpleCursorAdapter implements SectionInd
             if (mIndexer != null) {
                 mIndexer.setCursor(cursor);
             } else {
+                if (mResources == null)
+                    mResources = mFragment.getResources();
                 mIndexer = new MusicAlphabetIndexer(cursor, mDataIdx, mResources.getString(
                         R.string.fast_scroll_alphabet));
             }
