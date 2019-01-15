@@ -1720,7 +1720,16 @@ public class MediaPlaybackService extends Service {
             views.setOnClickPendingIntent(R.id.pause, pausePendingIntent);
             viewsLarge.setOnClickPendingIntent(R.id.pause, pausePendingIntent);
             status.flags = Notification.FLAG_ONGOING_EVENT;
-            startForeground(PLAYBACKSERVICE_STATUS, status);
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+
+                startForeground(0, status);
+            }
+
+            else {
+
+              startForeground(1, status);
+            }
 
         }
     }
