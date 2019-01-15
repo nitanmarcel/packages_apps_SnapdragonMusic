@@ -1871,6 +1871,7 @@ public class MediaPlaybackService extends Service {
             status.bigContentView = viewsLarge;
             if (isPlaying()) {
                 status.flags |= Notification.FLAG_ONGOING_EVENT;
+                status.flags |= Notification.FLAG_NO_CLEAR;
             } else {
                 status.flags = 0;
             }
